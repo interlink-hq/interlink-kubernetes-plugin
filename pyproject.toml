@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "interlink-ms-plugin"
+version = "0.0.1"
+description = ""
+authors = ["Mauro Gattari <mauro.gattari@infn.it>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+backoff = "^2.2.1"
+pydash = "^8.0.1"
+ipromise = "^1.9"
+fastapi = "^0.111.0"
+pydantic = "^2.7.1"
+jinja2 = "^3.1.4"
+fastapi-router-controller = "^0.5.0"
+uvicorn = "^0.29.0"
+confluent-kafka = "^2.4.0"
+pymongo = "^4.7.2"
+kubernetes = "^29.0.0"
+motor = "^3.4.0"
+injector = "^0.21.0"
+mongodb-migrations = "^1.3.1"
+interlink = { git = "https://github.com/interTwin-eu/interLink.git", subdirectory = "example" }
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.1.0"
+flake8 = "^7.0.0"
+black = "^24.4.2"
+autopep8 = "^2.1.0"
+isort = "^5.13.2"
+pytest = "^8.2.0"
+pytest-mock = "^3.14.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

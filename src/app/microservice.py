@@ -4,6 +4,7 @@ FastAPI entry point: load controllers and start the app.
 
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -14,10 +15,11 @@ from app.common.config import Option
 from app.utilities.async_utilities import manage_contexts
 
 from . import controllers
-from .dependencies import get_config, get_lifespan_async_context_managers
+from .dependencies import get_config, get_lifespan_async_context_managers, get_logger
 from .services.exceptions import DataNotFoundError, ServiceError
 
 config = get_config()
+logger = get_logger()
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -36,14 +38,14 @@ app = FastAPI(
     docs_url=config.get(Option.API_DOCS_PATH),
     openapi_tags=[
         {
-            "name": "Research DB Analysis Tool API",
-            "description": "API for accessing Research DB Analysis Tool functionalities",
+            "name": config.get(Option.APP_NAME),
+            "description": config.get(Option.APP_DESCRIPTION),
         }
     ],
 )
 
 
-# region CORS
+# region CORS Middleware
 # _ALLOWED_ORIGINS: Final = [
 #     "*",
 #     "http://localhost",
@@ -57,7 +59,26 @@ app = FastAPI(
 #     allow_methods=["*"],
 #     allow_headers=["*"],
 # )
-# endregion / CORS
+# endregion / CORS Middleware
+
+
+# region Middlewares
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        logger.debug(f"Request {request.method} to {request.url}")
+        body = await request.body()
+        logger.debug(f"Request body: {body.decode('utf-8') if body else 'None'}")
+
+        response = await call_next(request)
+
+        logger.debug(f"Response status code: {response.status_code}")
+        return response
+
+
+# app.add_middleware(LoggingMiddleware)
+# endregion / Middlewares
 
 
 # region Exception Handlers

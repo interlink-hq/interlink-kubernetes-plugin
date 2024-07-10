@@ -9,8 +9,8 @@ from app.controllers.common.dto import ApiErrorResponseDto
 from app.dependencies import get_kubernetes_plugin_service
 from app.services.kubernetes_plugin_service import KubernetesPluginService
 
-router = APIRouter()  # APIRouter(prefix="/api/v1/core", tags=["V1Core"])
-controller = Controller(router, openapi_tag={"name": "Identity Api"})
+router = APIRouter()  # APIRouter(prefix="/api/v1/pod", tags=["V1Pod"])
+controller = Controller(router, openapi_tag={"name": "Kubernetes Plugin Controller Api"})
 
 COMMON_ERROR_RESPONSES: Dict[int | str, Dict[str, Any]] = {
     # 401
@@ -47,13 +47,12 @@ class KubernetesPluginController:
     ) -> List[interlink.PodStatus]:
         return await k8s_service.get_status(pods)
 
-    # TODO: '/getLogs' is not RESTful, should be '/logs'
     @controller.route.get("/getLogs", summary="Get Pods' logs", responses=COMMON_ERROR_RESPONSES)
     async def get_logs(
         self,
         req: interlink.LogRequest,
         k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
-    ) -> bytes:
+    ) -> str:
         return await k8s_service.get_logs(req)
 
     @controller.route.post("/create", summary="Create pods", responses=COMMON_ERROR_RESPONSES)
@@ -61,10 +60,9 @@ class KubernetesPluginController:
         self,
         pods: List[interlink.Pod],
         k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
-    ) -> str:
+    ) -> interlink.CreateStruct:
         return await k8s_service.create_pods(pods)
 
-    # TODO: post to '/delete' is not RESTful, should use 'delete' method
     @controller.route.post("/delete", summary="Delete pod", responses=COMMON_ERROR_RESPONSES)
     async def delete_pod(
         self,

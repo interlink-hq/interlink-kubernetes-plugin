@@ -1,4 +1,6 @@
-"""FastAPI dependency functions"""
+"""
+Configure Dependency Injection
+"""
 
 import logging
 from contextlib import AbstractAsyncContextManager
@@ -43,6 +45,10 @@ _injector = Injector([InjectorModule()])
 # region Export Injector instances
 def get_config() -> Config:
     return _injector.get(Config)
+
+
+def get_logger() -> logging.Logger:
+    return _injector.get(logging.Logger)
 
 
 def get_kubernetes_plugin_service() -> KubernetesPluginService:

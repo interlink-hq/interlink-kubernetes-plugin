@@ -27,6 +27,7 @@ class Option(Enum):
     LOG_RICH_ENABLED = ("log", "rich_enabled")
 
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
+    K8S_OFFLOADING_NAMESPACE = ("k8s", "offloading_namespace")
 
     def __str__(self) -> str:
         return f"{self.section}.{self.key}"

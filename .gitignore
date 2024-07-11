@@ -131,6 +131,5 @@ dmypy.json
 .vscode
 .devcontainer
 **/credentials
-**/private
 /data
 /data_ext

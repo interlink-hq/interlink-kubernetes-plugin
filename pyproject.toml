@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "interlink-ms-plugin"
+name = "interlink-kubernetes-plugin"
 version = "0.0.1"
 description = ""
 authors = ["Mauro Gattari <mauro.gattari@infn.it>"]

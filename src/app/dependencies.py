@@ -7,25 +7,25 @@ from contextlib import AbstractAsyncContextManager
 from typing import List
 
 from injector import Injector, Module, provider, singleton
+from kubernetes import client as k
+from kubernetes import config as k_config
 
-from app.common.config import Config
+from app.common.config import Config, Option
 from app.common.logger_manager import LoggerManager
 from app.services.kubernetes_plugin_service import KubernetesPluginService
 
 
 # region Configure Injector Module
 class InjectorModule(Module):
-    """Register Injector singletons.
+    """Configure Injector bindings, i.e. how dependencies are provided.
 
-    Note: `Injector.get(MyClass)` gets the instance from the corresponding `@provider` if defined,
-    honoring the @singleton annotation, otherwise a fresh new instance of `MyClass` is created
-    (resolving constructor injected dependencies) and returned.
+    Note: bindings provide instances (within the given scope) when invoking `Injector.get(MyClass)`,
+    if no binding is defined for `MyClass` then a fresh new instance is created (resolving constructor
+    injected dependencies) and returned.
     """
 
-    @singleton
-    @provider
-    def provide_config(self) -> Config:
-        return Config()
+    def configure(self, binder):
+        binder.bind(Config, to=Config(), scope=singleton)
 
     @singleton
     @provider
@@ -34,15 +34,23 @@ class InjectorModule(Module):
 
     @singleton
     @provider
-    def provide_kubernetes_plugin_service(self, config: Config, logger: logging.Logger) -> KubernetesPluginService:
-        return KubernetesPluginService(config, logger)
+    def provide_kubernetes_core_api(self, config: Config) -> k.CoreV1Api:
+        k_config.load_kube_config(config_file=config.get(Option.K8S_KUBECONFIG_PATH))
+        return k.CoreV1Api()
+
+    @singleton
+    @provider
+    def provide_kubernetes_plugin_service(
+        self, config: Config, logger: logging.Logger, core_api: k.CoreV1Api
+    ) -> KubernetesPluginService:
+        return KubernetesPluginService(config, logger, core_api)
 
 
 _injector = Injector([InjectorModule()])
 # endregion / Configure Injector Module
 
 
-# region Export Injector instances
+# region Public Injector instances
 def get_config() -> Config:
     return _injector.get(Config)
 
@@ -59,4 +67,4 @@ def get_lifespan_async_context_managers() -> List[AbstractAsyncContextManager]:
     return []
 
 
-# endregion / Export Injector instances
+# endregion / Public Injector instances

@@ -5,14 +5,12 @@ import interlink
 import pydash as _
 from injector import inject
 from kubernetes import client as k
-from kubernetes import config as k_config
 from kubernetes.client.api import CoreV1Api
 
 from app.common.config import Config, Option
-from app.utilities.dictionary_utilities import map_key_names, map_datetime_to_str
+from app.utilities.dictionary_utilities import map_datetime_to_str, map_key_names
 
 from .base_service import BaseService
-
 
 _IK_UID_ANNOTATION_KEY = "interlink.source/uid"
 _IK_NAME_ANNOTATION_KEY = "interlink.source/name"
@@ -26,11 +24,10 @@ class KubernetesPluginService(BaseService):
     _offloading_namespace: str
 
     @inject
-    def __init__(self, config: Config, logger: Logger):
+    def __init__(self, config: Config, logger: Logger, core_api: k.CoreV1Api):
         super().__init__(config, logger)
-        k_config.load_kube_config(config_file=config.get(Option.K8S_KUBECONFIG_PATH))
+        self._core_api = core_api
         self._offloading_namespace = config.get(Option.K8S_OFFLOADING_NAMESPACE)
-        self._core_api = k.CoreV1Api()
         self._create_offloading_namespace()
 
     def _create_offloading_namespace(self):

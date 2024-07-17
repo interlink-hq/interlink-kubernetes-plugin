@@ -1,10 +1,11 @@
 """ Collection of dictionary utility functions """
 
 import dataclasses
-from typing import Any, Dict, Iterable, Union
 import typing as t
-import pydash as _
 from datetime import datetime
+from typing import Any, Dict, Iterable, Union
+
+import pydash as _
 
 T = t.TypeVar("T")
 T2 = t.TypeVar("T2")  # pylint: disable=invalid-name

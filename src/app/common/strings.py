@@ -1,5 +1,7 @@
 from enum import Enum
 
 
-class MSG(str, Enum):
+class Strings(str, Enum):
+    """Constant strings"""
+
     TASK_TYPE = "Task to run"

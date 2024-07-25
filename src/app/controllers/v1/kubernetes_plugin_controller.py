@@ -1,6 +1,6 @@
 from http import HTTPStatus
 from typing import Any, Dict, List
-import interlink
+import interlink as i
 
 from fastapi import APIRouter, Depends
 from fastapi_router_controller import Controller
@@ -42,31 +42,31 @@ class KubernetesPluginController:
     @controller.route.get("/status", summary="Get Pods' status", responses=COMMON_ERROR_RESPONSES)
     async def get_status(
         self,
-        pods: List[interlink.PodRequest],
-        k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
-    ) -> List[interlink.PodStatus]:
-        return await k8s_service.get_status(pods)
+        i_pods: List[i.PodRequest],
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+    ) -> List[i.PodStatus]:
+        return await k_service.get_status(i_pods)
 
     @controller.route.get("/getLogs", summary="Get Pods' logs", responses=COMMON_ERROR_RESPONSES)
     async def get_logs(
         self,
-        req: interlink.LogRequest,
-        k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+        i_log_req: i.LogRequest,
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
     ) -> str:
-        return await k8s_service.get_logs(req)
+        return await k_service.get_logs(i_log_req)
 
     @controller.route.post("/create", summary="Create pods", responses=COMMON_ERROR_RESPONSES)
     async def create_pods(
         self,
-        pods: List[interlink.Pod],
-        k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
-    ) -> interlink.CreateStruct:
-        return await k8s_service.create_pods(pods)
+        i_pods_with_volumes: List[i.Pod],
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+    ) -> i.CreateStruct:
+        return await k_service.create_pods(i_pods_with_volumes)
 
     @controller.route.post("/delete", summary="Delete pod", responses=COMMON_ERROR_RESPONSES)
     async def delete_pod(
         self,
-        pod: interlink.PodRequest,
-        k8s_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+        i_pod: i.PodRequest,
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
     ) -> str:
-        return await k8s_service.delete_pod(pod)
+        return await k_service.delete_pod(i_pod)

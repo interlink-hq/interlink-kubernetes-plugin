@@ -13,10 +13,10 @@ from fastapi_router_controller import Controller
 
 from app.common.config import Option
 from app.utilities.async_utilities import manage_contexts
+from app.common.error_types import ApplicationError
 
 from . import controllers
 from .dependencies import get_config, get_lifespan_async_context_managers, get_logger
-from .services.exceptions import DataNotFoundError, ServiceError
 
 config = get_config()
 logger = get_logger()
@@ -63,41 +63,40 @@ app = FastAPI(
 
 
 # region Middlewares
+if config.get(Option.LOG_REQUESTS_ENABLED, "False").lower() == "true":
 
+    class LoggingMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            logger.debug(f"Request {request.method} to {request.url}")
+            body = await request.body()
+            logger.debug(f"Request body: {body.decode('utf-8') if body else 'None'}")
 
-class LoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        logger.debug(f"Request {request.method} to {request.url}")
-        body = await request.body()
-        logger.debug(f"Request body: {body.decode('utf-8') if body else 'None'}")
+            response = await call_next(request)
 
-        response = await call_next(request)
+            logger.debug(f"Response status code: {response.status_code}")
+            return response
 
-        logger.debug(f"Response status code: {response.status_code}")
-        return response
-
-
-# app.add_middleware(LoggingMiddleware)
+    app.add_middleware(LoggingMiddleware)
 # endregion / Middlewares
 
 
 # region Exception Handlers
-async def _exception_handler_for_service_exceptions(_request: Request, exc: Exception):
-    """Set status code for selected errors"""
-    status_code = HTTPStatus.INTERNAL_SERVER_ERROR.value
-    if isinstance(exc, DataNotFoundError):
-        status_code = HTTPStatus.NOT_FOUND.value
-    raise HTTPException(status_code=status_code, detail=str(exc))
+async def _exception_handler_for_application_exceptions(_request: Request, exc: Exception):
+    """Map `ApplicationError` to `HTTPException`"""
+    assert isinstance(exc, ApplicationError)
+    raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 async def _exception_handler_to_enforce_json(_request: Request, exc: Exception):
     """Ensure to return a json response (matching ApiErrorResponseDto) in case of error"""
     if isinstance(exc, HTTPException):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    return JSONResponse(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, content={"detail": str(exc)})
+    return JSONResponse(
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, content={"detail": f"{exc.__class__.__name__}: {exc}"}
+    )
 
 
-app.add_exception_handler(ServiceError, _exception_handler_for_service_exceptions)
+app.add_exception_handler(ApplicationError, _exception_handler_for_application_exceptions)
 app.add_exception_handler(Exception, _exception_handler_to_enforce_json)
 # endregion / Exception Handlers
 

@@ -1,181 +1,276 @@
 from logging import Logger
-from typing import Dict, List
+from typing import List
 
-import interlink
+import interlink as i
+import kubernetes.client.exceptions as k_exceptions
 import pydash as _
 from injector import inject
 from kubernetes import client as k
 from kubernetes.client.api import CoreV1Api
+from kubernetes.client.api_client import ApiClient
 
 from app.common.config import Config, Option
-from app.utilities.dictionary_utilities import map_datetime_to_str, map_key_names
+from app.entities import mappers
 
 from .base_service import BaseService
 
-_IK_UID_ANNOTATION_KEY = "interlink.source/uid"
-_IK_NAME_ANNOTATION_KEY = "interlink.source/name"
-_IK_NAMESPACE_ANNOTATION_KEY = "interlink.source/namespace"
-_IK_LABELS = {"interlink/role": "offloading"}
+_I_S_UID_ANN_KEY = "interlink/source.uid"
+_I_S_NAME_ANN_KEY = "interlink/source.name"
+_I_S_NS_ANN_KEY = "interlink/source.namespace"
+_I_LABELS = {"interlink": "offloading"}
+_I_LABELS_SELECTOR = ",".join([f"{key}={value}" for key, value in _I_LABELS.items()])
 
 
 class KubernetesPluginService(BaseService):
 
-    _core_api: CoreV1Api
+    _k_api: CoreV1Api
+    _k_api_client: ApiClient
     _offloading_namespace: str
 
     @inject
-    def __init__(self, config: Config, logger: Logger, core_api: k.CoreV1Api):
+    def __init__(self, config: Config, logger: Logger, k_api: k.CoreV1Api):
         super().__init__(config, logger)
-        self._core_api = core_api
+        self._k_api = k_api
+        self._k_api_client = k_api.api_client  # type: ignore
         self._offloading_namespace = config.get(Option.K8S_OFFLOADING_NAMESPACE)
-        self._create_offloading_namespace()
 
-    def _create_offloading_namespace(self):
-        namespaces: k.V1NamespaceList = self._core_api.list_namespace(
-            label_selector=",".join([f"{key}={value}" for key, value in _IK_LABELS.items()])
-        )
-        if not namespaces.items:
-            self._core_api.create_namespace(
-                k.V1Namespace(
-                    api_version="v1",
-                    kind="Namespace",
-                    metadata=k.V1ObjectMeta(name=self._offloading_namespace, labels=_IK_LABELS),
-                )
-            )
-
-    async def get_status(self, pods: List[interlink.PodRequest]) -> List[interlink.PodStatus]:
-        status: List[interlink.PodStatus] = []
-        for ik_pod_request in pods:
+    async def get_status(self, i_pods: List[i.PodRequest]) -> List[i.PodStatus]:
+        status: List[i.PodStatus] = []
+        for i_pod in i_pods:
             try:
-                remote_pod: k.V1Pod = self._core_api.read_namespaced_pod_status(
-                    name=f"{ik_pod_request.metadata.name}-{ik_pod_request.metadata.uid}",
-                    namespace=self._offloading_namespace,
-                )  # type: ignore
+                assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
-                # region Type checking
-                assert (
-                    isinstance(remote_pod.metadata, k.V1ObjectMeta)
-                    and remote_pod.metadata.name is not None
-                    and remote_pod.metadata.namespace is not None
+                remote_pod: k.V1Pod = self._k_api.read_namespaced_pod_status(
+                    name=self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid),
+                    namespace=self._scoped_ns(i_pod.metadata.namespace),
                 )
-                assert (
-                    isinstance(remote_pod.metadata.annotations, Dict)
-                    and _IK_UID_ANNOTATION_KEY in remote_pod.metadata.annotations
-                )
-                assert isinstance(remote_pod.status, k.V1PodStatus)
-                assert (
-                    isinstance(ik_pod_request.metadata.name, str)
-                    and isinstance(ik_pod_request.metadata.uid, str)
-                    and isinstance(ik_pod_request.metadata.namespace, str)
-                )
-                # endregion / Type checking
 
-                remote_container_statuses: List[k.V1ContainerStatus] = remote_pod.status.container_statuses  # type: ignore  # pylint: disable=line-too-long  # noqa: E501
-                ik_container_statuses: List[interlink.ContainerStatus] = [
-                    map_container_status(container_status) for container_status in remote_container_statuses
+                assert remote_pod.metadata and remote_pod.status
+
+                remote_container_statuses: List[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
+                i_container_statuses: List[i.ContainerStatus] = [
+                    mappers.map_k_model_to_i_model(self._k_api_client, cs, i.ContainerStatus)
+                    for cs in remote_container_statuses
                 ]
 
-                pod_status = interlink.PodStatus(
-                    name=ik_pod_request.metadata.name,
-                    UID=ik_pod_request.metadata.uid,
-                    namespace=ik_pod_request.metadata.namespace,
-                    containers=ik_container_statuses,
+                i_pod_status = i.PodStatus(
+                    UID=i_pod.metadata.uid,
+                    name=i_pod.metadata.name,
+                    namespace=i_pod.metadata.namespace,
+                    containers=i_container_statuses,
                 )
 
-                status.append(pod_status)
-                self.logger.info("Pod '%s' status='%s'", pod_status.name, pod_status.containers)
-            except k.ApiException as api_exception:
+                status.append(i_pod_status)
+
+                self.logger.debug(
+                    "Pod '%s' (namespace '%s') status: %s",
+                    remote_pod.metadata.name,
+                    remote_pod.metadata.namespace,
+                    str(i_pod_status.containers),
+                )
+            except k_exceptions.ApiException as api_exception:
                 raise api_exception
         return status
 
-    async def get_logs(self, req: interlink.LogRequest) -> str:
-        return self._core_api.read_namespaced_pod_log(
-            name=f"{req.PodName}-{req.PodUID}", namespace=self._offloading_namespace  # namespace=req.Namespace
+    async def get_logs(self, i_log_req: i.LogRequest) -> str:
+        return self._k_api.read_namespaced_pod_log(
+            name=self._scoped_obj(i_log_req.PodName, uid=i_log_req.PodUID),
+            namespace=self._scoped_ns(i_log_req.Namespace),
         )
 
-    async def create_pods(self, pods: List[interlink.Pod]) -> interlink.CreateStruct:
-        results = []
+    async def create_pods(self, i_pods_with_volumes: List[i.Pod]) -> i.CreateStruct:
+        results: List[i.CreateStruct] = []
 
-        for ik_pod in pods:
+        for i_pod_with_volumes in i_pods_with_volumes:
             try:
-                pod = k.V1Pod(
-                    api_version="v1",
-                    kind="Pod",
-                    metadata=map_ik_metadata(ik_pod.pod.metadata),
-                    spec=map_ik_pod_spec(ik_pod.pod.spec),
-                )
+                assert i_pod_with_volumes.pod.metadata.namespace
+                self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
 
-                # region Type checking
-                assert isinstance(pod.metadata, k.V1ObjectMeta)
-                assert isinstance(pod.metadata.annotations, dict)
-                assert isinstance(pod.metadata.labels, dict)
-                assert isinstance(pod.spec, k.V1PodSpec)
-                assert ik_pod.pod.metadata.uid is not None
-                # endregion
-
-                pod.metadata.annotations.update(
-                    {
-                        _IK_UID_ANNOTATION_KEY: ik_pod.pod.metadata.uid,
-                        _IK_NAME_ANNOTATION_KEY: pod.metadata.name,
-                        _IK_NAMESPACE_ANNOTATION_KEY: pod.metadata.namespace,
-                    }
-                )
-                pod.metadata.name = f"{ik_pod.pod.metadata.name}-{ik_pod.pod.metadata.uid}"
-                pod.metadata.namespace = self._offloading_namespace
-                pod.metadata.labels.update(_IK_LABELS)
-
-                remote_pod: k.V1Pod = self._core_api.create_namespaced_pod(
-                    namespace=pod.metadata.namespace, body=pod
-                )  # type: ignore
-
-                # region Type checking
-                assert remote_pod.metadata is not None
-                assert isinstance(remote_pod.metadata.uid, str)
-                # endregion
-
-                create_result = interlink.CreateStruct(PodUID=ik_pod.pod.metadata.uid, PodJID=remote_pod.metadata.uid)
-                self.logger.info("Pod '%s' created: '%s'", remote_pod.metadata.name, create_result)
-                results.append(create_result)
-            except k.ApiException as api_exception:
+                for i_volume in i_pod_with_volumes.container:
+                    if i_volume.configMaps:
+                        self._create_config_maps(i_volume.configMaps, uid=i_pod_with_volumes.pod.metadata.uid)
+                    if i_volume.secrets:
+                        self._create_secrets(i_volume.secrets, uid=i_pod_with_volumes.pod.metadata.uid)
+                results.append(self._create_pod(i_pod_with_volumes.pod))
+            except k_exceptions.ApiException as api_exception:
                 raise api_exception
 
         return results[0]
 
-    async def delete_pod(self, ik_pod_request: interlink.PodRequest) -> str:
+    async def delete_pod(self, i_pod: i.PodRequest) -> str:
+        assert i_pod.metadata.name and i_pod.metadata.namespace
+
+        name = self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid)
+        namespace = self._scoped_ns(i_pod.metadata.namespace)
+        self.logger.info("Delete Pod '%s' (namespace '%s')", name, namespace)
+
         try:
-            remote_pod: k.V1Pod = self._core_api.delete_namespaced_pod(
-                name=f"{ik_pod_request.metadata.name}-{ik_pod_request.metadata.uid}",
-                namespace=self._offloading_namespace,
-            )  # type: ignore
-            assert remote_pod.metadata is not None
-            self.logger.info("Pod '%s' deleted, status='%s'", remote_pod.metadata.name, str(remote_pod.status))
-        except k.ApiException as api_exception:
-            raise api_exception
+            self._k_api.delete_namespaced_pod(name=name, namespace=namespace)
+        except k_exceptions.ApiException as api_exception:
+            self.logger.error(api_exception)
+
+        if i_pod.spec and i_pod.spec.volumes:
+            for volume in i_pod.spec.volumes:
+                if volume.configMap:
+                    scoped_name = self._scoped_obj(volume.configMap.name, uid=i_pod.metadata.uid)
+                    self.logger.info("Delete ConfigMap '%s' (namespace '%s')", scoped_name, namespace)
+                    try:
+                        self._k_api.delete_namespaced_config_map(scoped_name, namespace)
+                    except k_exceptions.ApiException as api_exception:
+                        self.logger.error(api_exception)
+                if volume.secret:
+                    scoped_name = self._scoped_obj(volume.secret.secretName, uid=i_pod.metadata.uid)
+                    self.logger.info("Delete Secret '%s' (namespace '%s')", scoped_name, namespace)
+                    try:
+                        self._k_api.delete_namespaced_secret(scoped_name, namespace)
+                    except k_exceptions.ApiException as api_exception:
+                        self.logger.error(api_exception)
+
         return "Pod deleted"
 
-
-def map_ik_metadata(ik_metadata: interlink.Metadata) -> k.V1ObjectMeta:
-    return k.V1ObjectMeta(**map_key_names(ik_metadata.model_dump(), k.V1ObjectMeta.attribute_map, reverse=True))
-
-
-def map_ik_pod_spec(ik_pod_spec: interlink.PodSpec) -> k.V1PodSpec:
-    return k.V1PodSpec(**map_key_names(ik_pod_spec.model_dump(), k.V1PodSpec.attribute_map, reverse=True))
-
-
-def map_container_status(container_status: k.V1ContainerStatus) -> interlink.ContainerStatus:
-    return interlink.ContainerStatus(
-        **map_datetime_to_str(
-            map_key_names(
-                container_status.to_dict(),
-                _.merge(
-                    {},
-                    k.V1ContainerStatus.attribute_map,
-                    k.V1ContainerState.attribute_map,
-                    k.V1ContainerStateRunning.attribute_map,
-                    k.V1ContainerStateTerminated.attribute_map,
-                    k.V1ContainerStateWaiting.attribute_map,
-                ),
-                deep=True,
+    def _create_offloading_namespace(self, name: str):
+        scoped_ns = self._scoped_ns(name)
+        namespaces: k.V1NamespaceList = self._k_api.list_namespace(label_selector=_I_LABELS_SELECTOR)
+        assert isinstance(namespaces.items, list)
+        if _.find(namespaces.items, lambda item: item.metadata.name == scoped_ns if item.metadata else False):
+            self.logger.info("Namespace '%s' already exists", scoped_ns)
+        else:
+            self._k_api.create_namespace(
+                k.V1Namespace(
+                    api_version="v1",
+                    kind="Namespace",
+                    metadata=k.V1ObjectMeta(name=scoped_ns, labels=_I_LABELS),
+                )
             )
+            self.logger.info("Namespace '%s' created", scoped_ns)
+
+    def _create_pod(self, i_pod: i.PodRequest) -> i.CreateStruct:
+        metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.metadata, k.V1ObjectMeta)
+        self._scoped_metadata(metadata, metadata, uid=i_pod.metadata.uid)
+
+        pod_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
+        self._scoped_volumes(pod_spec, uid=i_pod.metadata.uid)
+
+        pod = k.V1Pod(
+            api_version="v1",
+            kind="Pod",
+            metadata=metadata,
+            spec=pod_spec,
         )
-    )
+
+        assert metadata.namespace
+        assert pod.spec
+
+        remote_pod: k.V1Pod = self._k_api.create_namespaced_pod(namespace=metadata.namespace, body=pod)
+
+        assert i_pod.metadata.uid and remote_pod.metadata and remote_pod.metadata.uid
+
+        create_result = i.CreateStruct(PodUID=i_pod.metadata.uid, PodJID=remote_pod.metadata.uid)
+        self.logger.info(
+            "Pod '%s' (namespace '%s') created, with result: %s",
+            remote_pod.metadata.name,
+            remote_pod.metadata.namespace,
+            create_result,
+        )
+        return create_result
+
+    def _create_config_maps(self, i_config_maps: List[i.ConfigMap], *, uid: str | None) -> List[k.V1ConfigMap]:
+        results = []
+
+        for i_config_map in i_config_maps:
+            metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_config_map.metadata, k.V1ObjectMeta)
+            self._scoped_metadata(metadata, metadata, uid=uid)
+
+            config_map = k.V1ConfigMap(
+                api_version="v1",
+                kind="ConfigMap",
+                metadata=metadata,
+                data=i_config_map.data,
+                binary_data=i_config_map.binaryData,
+                immutable=i_config_map.immutable,
+            )
+
+            assert metadata.namespace and metadata.name
+
+            remote_config_map: k.V1ConfigMap = self._k_api.create_namespaced_config_map(
+                namespace=metadata.namespace, body=config_map
+            )
+
+            self.logger.info("ConfigMap '%s' (namespace '%s') created", metadata.name, metadata.namespace)
+            results.append(remote_config_map)
+        return results
+
+    def _create_secrets(self, i_secrets: List[i.Secret], *, uid: str | None) -> List[k.V1Secret]:
+        results = []
+
+        for i_secret in i_secrets:
+            metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_secret.metadata, k.V1ObjectMeta)
+            self._scoped_metadata(metadata, metadata, uid=uid)
+
+            secret = k.V1Secret(
+                api_version="v1",
+                kind="Secret",
+                metadata=metadata,
+                data=i_secret.data,
+                string_data=i_secret.stringData,
+                immutable=i_secret.immutable,
+                type=i_secret.type,
+            )
+
+            assert metadata.namespace and metadata.name
+
+            remote_secret: k.V1Secret = self._k_api.create_namespaced_secret(namespace=metadata.namespace, body=secret)
+
+            self.logger.info("Secret '%s' (namespace '%s') created", metadata.name, metadata.namespace)
+            results.append(remote_secret)
+        return results
+
+    def _scoped_ns(self, name: str) -> str:
+        """Scope a namespace name to the configuration option `_offloading_namespace`"""
+        return f"{self._offloading_namespace}-{name}" if self._offloading_namespace else name
+
+    def _scoped_obj(self, name: str, *, uid: str | None) -> str:
+        """Scope an object name to the related Pod's uid"""
+        return f"{name}-{uid}" if uid else name
+
+    def _scoped_metadata(self, metadata: k.V1ObjectMeta, source_metadata: k.V1ObjectMeta, *, uid: str | None):
+        assert metadata.annotations is not None and metadata.labels is not None
+        assert source_metadata.uid and source_metadata.name and source_metadata.namespace
+
+        metadata.labels.update(_I_LABELS)
+        metadata.annotations.update(
+            {
+                _I_S_UID_ANN_KEY: source_metadata.uid,
+                _I_S_NAME_ANN_KEY: source_metadata.name,
+                _I_S_NS_ANN_KEY: source_metadata.namespace,
+            }
+        )
+        metadata.namespace = self._scoped_ns(source_metadata.namespace)
+        if uid:
+            metadata.name = self._scoped_obj(source_metadata.name, uid=uid)
+
+    def _scoped_volumes(self, pod_spec: k.V1PodSpec, *, uid: str | None):
+        # region spec.volumes
+        scoped_volumes: List[k.V1Volume] = []
+        for volume in pod_spec.volumes or []:
+            if isinstance(volume, k.V1Volume):
+                if volume.config_map:
+                    assert volume.config_map.name
+                    volume.config_map.name = self._scoped_obj(volume.config_map.name, uid=uid)
+                    scoped_volumes.append(volume)
+                if volume.secret:
+                    assert volume.secret.secret_name
+                    volume.secret.secret_name = self._scoped_obj(volume.secret.secret_name, uid=uid)
+                    scoped_volumes.append(volume)
+                if volume.empty_dir:
+                    scoped_volumes.append(volume)
+        pod_spec.volumes = scoped_volumes if scoped_volumes else None
+        # endregion
+        # region spec.containers[*].volumeMounts
+        for container in pod_spec.containers:
+            scoped_volume_mounts: List[k.V1VolumeMount] = []
+            for volume_mount in container.volume_mounts or []:
+                if _.find(scoped_volumes, lambda v: v.name == volume_mount.name):
+                    scoped_volume_mounts.append(volume_mount)
+            container.volume_mounts = scoped_volume_mounts if scoped_volume_mounts else None
+        # endregion

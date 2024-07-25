@@ -1,0 +1,33 @@
+FROM python:3.12.3
+
+# Arguments for the build
+# ARG EXAMPLE_ARG=4.0.0
+
+# To avoid interaction with apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+# Set default shell to /bin/bash
+# https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
+SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+
+# Dev packages
+RUN apt -y update && \
+    apt -y install git wget nano less
+RUN apt -y install bat && \
+    mkdir -p ~/.local/bin && ln -s /usr/bin/batcat ~/.local/bin/bat
+RUN apt -y install zsh && \
+    git clone https://github.com/jotyGill/ezsh ezsh && \
+    cd ezsh && ./install.sh -c
+
+# App packages
+# RUN apt -y install libmagic-dev
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Install pip requirements
+COPY infr/containers/dev/requirements.txt /tmp/pip-tmp/
+RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
+    && rm -rf /tmp/pip-tmp
+
+# Install other dependencies (not managed by poetry)
+RUN pip install kubernetes-stubs-elephant-fork==29.0.0

@@ -64,6 +64,17 @@ class MissingParametersError(ApplicationError):
     status_code = HTTPStatus.BAD_REQUEST.value
 
 
+class MissingPropertiesError(ApplicationError):
+    """
+    One or more required properties are missing.
+
+    :ivar object_name: The name of the object that has missing properties.
+    :ivar missing: The names of the missing properties.
+    """
+
+    template = "The following properties are missing for {object_name}: {missing}"
+
+
 class ValidationError(ApplicationError):
     """
     An exception occurred validating parameters.

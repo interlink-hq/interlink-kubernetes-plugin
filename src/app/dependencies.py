@@ -8,7 +8,9 @@ from typing import List
 
 from injector import Injector, Module, provider, singleton
 from kubernetes import client as k
-from kubernetes import config as k_config
+from kubernetes.client.api import CoreV1Api
+from kubernetes.client.api_client import ApiClient
+from kubernetes.config import kube_config
 
 from app.common.config import Config, Option
 from app.common.logger_manager import LoggerManager
@@ -35,8 +37,23 @@ class InjectorModule(Module):
     @singleton
     @provider
     def provide_kubernetes_core_api(self, config: Config) -> k.CoreV1Api:
-        k_config.load_kube_config(config_file=config.get(Option.K8S_KUBECONFIG_PATH))
-        return k.CoreV1Api()
+        configuration = k.Configuration()
+        # if config.get(Option.K8S_API_SSL_CA_CERT):
+        #     configuration.ssl_ca_cert = config.get(Option.K8S_API_SSL_CA_CERT)
+
+        api_client = ApiClient(configuration)
+        kube_config.load_kube_config(
+            config_file=config.get(Option.K8S_KUBECONFIG_PATH), client_configuration=configuration
+        )
+        return CoreV1Api(api_client)
+
+        # if config.get(Option.K8S_API_SSL_CA_CERT):
+        #     configuration = kube_config.Configuration()
+        #     configuration.ssl_ca_cert = config.get(Option.K8S_API_SSL_CA_CERT)
+        #     api_client = ApiClient(configuration)
+        #     return CoreV1Api(api_client)
+
+        # return CoreV1Api()
 
     @singleton
     @provider

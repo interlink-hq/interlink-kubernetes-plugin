@@ -25,7 +25,9 @@ class Option(Enum):
     LOG_LEVEL = ("log", "level")
     LOG_DIR = ("log", "dir")
     LOG_RICH_ENABLED = ("log", "rich_enabled")
+    LOG_REQUESTS_ENABLED = ("log", "requests_enabled")
 
+    K8S_API_SSL_CA_CERT = ("k8s", "api_ssl_ca_cert")
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
     K8S_OFFLOADING_NAMESPACE = ("k8s", "offloading_namespace")
 

@@ -10,26 +10,32 @@ spec:
   selector:
     matchLabels:
       {{- include "bastion.selectorLabels" . | nindent 6 }}
+      interlink/role: {{ include "bastion.name" . }}
   template:
     metadata:
       labels:
         {{- include "bastion.labels" . | nindent 8 }}
+        interlink/role: {{ include "bastion.name" . }}
     spec:
       containers:
-        - name: sshd
+        - name: openssh-client
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - containerPort: {{ .Values.service.port }}
+          command: ["/bin/sh", "-c"]
+          args:
+          - >-
+            eval "$(ssh-agent -s)" &&
+            echo "$SSH_DEPLOY_KEY" | ssh-add - &&
+            ssh -N -R 0.0.0.0:${GATEWAY_TUNNEL_PORT}:${SERVICE_HOST}:${SERVICE_PORT} ${GATEWAY_USER}@${GATEWAY_HOST} -p ${GATEWAY_PORT}
+            # - ssh -N -R 0.0.0.0:8181:mlaas-inference-service-predictor-00001.mlaas.svc.cluster.local:80 interlink-user@131.154.98.72 -p 30222
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
-            - name: PUID
-              value: "1000"
-            - name: PGID
-              value: "1000"
-            - name: TZ
-              value: Etc/UTC
+            - name: SSH_DEPLOY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bastion.fullname" . }}
+                  key: SSH_PRIVATE_KEY
           envFrom:
             - configMapRef:
-                name: {{ include "bastion.fullname" . }}-cm
+                name: {{ include "bastion.fullname" . }}

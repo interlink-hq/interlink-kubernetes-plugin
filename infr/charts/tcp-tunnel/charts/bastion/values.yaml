@@ -1,15 +1,17 @@
 image:
-  repository: docker.io/mginfn/openssh-server
+  repository: docker.io/finalgene/openssh:latest
   tag: latest
   pullPolicy: IfNotPresent
-service:
-  port: 2222
-  publicPort: 30222  
-  type: NodePort
-ssh:
-  # base64 --wrap 0 /app/private/ssh/id_rsa
-  privateKey:
-  userName: interlink-user
+gateway:
+  host:
+  ssh:
+    port: 30222
+    privateKey:
+    userName: interlink-user
+tunnel:
+  serviceHost: 
+  servicePort: 80
+  gatewayPort: 8181
 resources:
   requests:
     cpu: 100m

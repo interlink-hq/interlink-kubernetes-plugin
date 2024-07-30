@@ -3,10 +3,10 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 service:
-  port: 2222
-  publicPort: 30222  
+  port: 30222  
   type: NodePort
 ssh:
+  port: 2222
   publicKey:
   userName: interlink-user
 resources:

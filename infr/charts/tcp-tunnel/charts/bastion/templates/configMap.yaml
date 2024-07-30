@@ -1,16 +1,14 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "bastion.fullname" . }}-cm
+  name: {{ include "bastion.fullname" . }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
     interlink/role: {{ include "bastion.name" . }}
 data:
-  PUBLIC_KEY: {{ .Values.ssh.publicKey }}
-  USER_NAME: {{ .Values.ssh.userName }}
-  GATEWAY_HOST: "131.154.98.72"
-  GATEWAY_SSH_PORT: "30222"
-  GATEWAY_TUNNEL_PORT: "8181"
-  GATEWAY_USER: interlink-user
-  REMOVE_SERVICE_HOST: mlaas-inference-service-predictor-00001.mlaas.svc.cluster.local
-  REMOVE_SERVICE_PORT: "80"
+  GATEWAY_HOST: "{{ .Values.gateway.host }}"
+  GATEWAY_PORT: "{{ .Values.gateway.ssh.port }}"
+  GATEWAY_USER: {{ .Values.gateway.ssh.userName }}
+  GATEWAY_TUNNEL_PORT: "{{ .Values.tunnel.gatewayPort }}"
+  SERVICE_HOST: {{ .Values.tunnel.serviceHost }}
+  SERVICE_PORT: "{{ .Values.tunnel.servicePort }}"

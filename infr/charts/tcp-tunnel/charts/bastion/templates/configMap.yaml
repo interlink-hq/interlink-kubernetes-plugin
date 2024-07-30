@@ -6,9 +6,9 @@ metadata:
     {{- include "bastion.labels" . | nindent 4 }}
     interlink/role: {{ include "bastion.name" . }}
 data:
-  GATEWAY_HOST: "{{ .Values.gateway.host }}"
-  GATEWAY_PORT: "{{ .Values.gateway.ssh.port }}"
-  GATEWAY_USER: {{ .Values.gateway.ssh.userName }}
-  GATEWAY_TUNNEL_PORT: "{{ .Values.tunnel.gatewayPort }}"
-  SERVICE_HOST: {{ .Values.tunnel.serviceHost }}
-  SERVICE_PORT: "{{ .Values.tunnel.servicePort }}"
+  GATEWAY_HOST: "{{ .Values.tunnel.gateway.host }}"
+  GATEWAY_PORT: "{{ .Values.tunnel.gateway.ssh.port }}"
+  GATEWAY_USER: {{ .Values.tunnel.gateway.ssh.userName }}
+  GATEWAY_TUNNEL_PORT: "{{ .Values.tunnel.service.gatewayPort }}"
+  SERVICE_HOST: {{ .Values.tunnel.service.targetHost }}
+  SERVICE_PORT: "{{ .Values.tunnel.service.targetPort }}"

@@ -30,7 +30,7 @@ Install Gateway on the *local* cluster.
 Install release `msoff` (microservice offloading):
 ```sh
 helm install msoff ./tcp-tunnel/charts/gateway \
-    --namespace myservice \
+    --namespace myservice --create-namespace \
     --set ssh.publicKey="$(cat ../../src/private/ssh/id_rsa.pub)" \
     --dry-run --debug
 ```
@@ -39,13 +39,13 @@ helm install msoff ./tcp-tunnel/charts/gateway \
 
 The command above deploys a Gateway pod that listens for SSH connections on public port 30222 (through a NodePort); the Bastion pod will connect through that port to create a Reverse SSH tunnel.
 
-You can specify `serviceTunnel` parameters to additionally expose a public port (through a NodePort) that will be used later as the source of the TCP traffic to be forwarded through the Reverse SSH tunnel:
+You can specify `tunnel.service` parameters to additionally expose a public port (through a NodePort) that will be used later as the source of the TCP traffic to be forwarded through the Reverse SSH tunnel:
 ```sh
 helm install msoff ./tcp-tunnel/charts/gateway \
-    --namespace myservice \
+    --namespace myservice --create-namespace \
     --set ssh.publicKey="$(cat ../../src/private/ssh/id_rsa.pub)" \
-    --set serviceTunnel.port=8181 \
-    --set serviceTunnel.nodePort=30181 \
+    --set tunnel.service.sourcePort=8181 \
+    --set tunnel.service.sourceNodePort=30181 \
     --dry-run --debug
 ```
 
@@ -57,22 +57,26 @@ Install Bastion on the *remote* cluster.
 
 Install release `msoff` (microservice offloading):
 ```sh
-GATEWAY_HOST=192.135.24.221
+GATEWAY_HOST=131.154.98.96
 SERVICE_HOST=mlaas-inference-service-hep-predictor-00001.mlaas.svc.cluster.local
 helm install msoff ./tcp-tunnel/charts/bastion \
-    --namespace myservice \
-    --set gateway.host=${GATEWAY_HOST} \
-    --set gateway.ssh.privateKey=$(base64 --wrap 0 ../../src/private/ssh/id_rsa ) \
-    --set tunnel.serviceHost=${SERVICE_HOST} \
-    --set tunnel.servicePort=80 \
-    --set tunnel.gatewayPort=8181 \
+    --namespace myservice --create-namespace \
+    --set tunnel.gateway.host=${GATEWAY_HOST} \
+    --set tunnel.gateway.ssh.privateKey=$(base64 --wrap 0 ../../src/private/ssh/id_rsa ) \
+    --set tunnel.service.gatewayPort=8181 \
+    --set tunnel.service.targetHost=${SERVICE_HOST} \
+    --set tunnel.service.targetPort=80 \
     --dry-run --debug
 ```
 
 ## Check tunnel
 
-Let's check whether traffic from ${GATEWAY_HOST}:30181 (*local* cluster) is forwarded to ${SERVICE_HOST}:80 in *remote* cluster.
-
+Check whether TCP port 30181 is open on ${GATEWAY_HOST}:
 ```sh
-curl --location http://${GATEWAY_HOST}:30181/v1/models/mlaas-inference-service-hep'
+nc -zv ${GATEWAY_HOST} 30181
+```
+
+Then check whether traffic from ${GATEWAY_HOST}:30181 (*local* cluster) is forwarded to ${SERVICE_HOST}:80 in *remote* cluster.
+```sh
+curl --location "http://${GATEWAY_HOST}:30181/v1/models/mlaas-inference-service-hep"
 ```

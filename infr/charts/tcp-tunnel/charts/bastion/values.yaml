@@ -1,17 +1,18 @@
 image:
-  repository: docker.io/finalgene/openssh:latest
+  repository: docker.io/finalgene/openssh
   tag: latest
   pullPolicy: IfNotPresent
-gateway:
-  host:
-  ssh:
-    port: 30222
-    privateKey:
-    userName: interlink-user
 tunnel:
-  serviceHost: 
-  servicePort: 80
-  gatewayPort: 8181
+  gateway:
+    host:
+    ssh:
+      port: 30222
+      privateKey:
+      userName: interlink-user
+  service:
+    gatewayPort: 8181
+    targetHost: 
+    targetPort: 80
 resources:
   requests:
     cpu: 100m

@@ -15,7 +15,7 @@ spec:
   selector:
     {{- include "gateway.selectorLabels" . | nindent 4 }}
     interlink/role: {{ include "gateway.name" . }}
-{{- if .Values.serviceTunnel }}
+{{- if and .Values.tunnel .Values.tunnel.service }}
 ---
 apiVersion: v1
 kind: Service
@@ -27,9 +27,9 @@ metadata:
 spec:
   type: NodePort
   ports:
-    - port: {{ .Values.serviceTunnel.port }}
-      targetPort: {{ .Values.serviceTunnel.port }}
-      nodePort: {{ .Values.serviceTunnel.nodePort }}
+    - port: {{ .Values.tunnel.service.sourcePort }}
+      targetPort: {{ .Values.tunnel.service.sourcePort }}
+      nodePort: {{ .Values.tunnel.service.sourceNodePort }}
       protocol: TCP
   selector:
     {{- include "gateway.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-cm
+  namespace: default
+data:
+  test_cm_data: just a ConfigMap test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+  namespace: default
+type: Opaque
+data:
+  # test_secret_data: just a Secret test
+  test_secret_data: anVzdCBhIFNlY3JldCB0ZXN0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: default
+  labels:
+    app: example
+spec:
+  containers:
+  - name: test-container
+    # curl "localhost:8080/params?query=test" | jq .request
+    image: ealen/echo-server
+    command: ["node", "webserver"]
+    resources:
+      limits:
+        memory: "32Mi"
+        cpu: "10m"
+    env:
+      - name: PORT
+        value: "8282"
+      - name: test_data
+        value: just a test
+      # TODO: is this supported?
+      # - name: test_cm_data
+      #   valueFrom:
+      #     configMapKeyRef:
+      #       name: test-cm
+      #       key: test_cm_data
+    # TODO Not supported by Interlink: not forwarding Create call to sidecar
+    # envFrom:
+    #   - configMapRef:
+    #       name: test-cm
+    ports:
+      - containerPort: 8282
+    volumeMounts:
+    - name: test-cm-volume
+      mountPath: /etc/config/cm.json
+    - name: test-secret-volume
+      mountPath: /etc/config/secret.json
+      readOnly: true
+  volumes:
+  - name: test-cm-volume
+    configMap:
+      name: test-cm
+  - name: test-secret-volume
+    secret:
+      secretName: test-secret
+  nodeSelector:
+    type: virtual-kubelet
+  tolerations:
+  - key: "virtual-node.interlink/no-schedule"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-pod-tunnel-nodeport
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    interlink/role: gateway
+  ports:
+  - port: 8282
+    targetPort: 8282
+    nodePort: 30282

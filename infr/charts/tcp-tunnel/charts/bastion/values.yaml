@@ -1,0 +1,21 @@
+image:
+  repository: docker.io/mginfn/openssh-server
+  tag: latest
+  pullPolicy: IfNotPresent
+service:
+  port: 2222
+  publicPort: 30222  
+  type: NodePort
+ssh:
+  # base64 --wrap 0 /app/private/ssh/id_rsa
+  privateKey:
+  userName: interlink-user
+resources:
+  requests:
+    cpu: 100m
+    memory: 16Mi
+    # ephemeral-storage: 1Gi
+  limits:
+    cpu: 200m
+    memory: 32Mi
+    # ephemeral-storage: 2Gi

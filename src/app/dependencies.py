@@ -47,14 +47,6 @@ class InjectorModule(Module):
         )
         return CoreV1Api(api_client)
 
-        # if config.get(Option.K8S_API_SSL_CA_CERT):
-        #     configuration = kube_config.Configuration()
-        #     configuration.ssl_ca_cert = config.get(Option.K8S_API_SSL_CA_CERT)
-        #     api_client = ApiClient(configuration)
-        #     return CoreV1Api(api_client)
-
-        # return CoreV1Api()
-
     @singleton
     @provider
     def provide_kubernetes_plugin_service(

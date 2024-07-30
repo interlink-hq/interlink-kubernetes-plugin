@@ -23,6 +23,7 @@ motor = "^3.4.0"
 injector = "^0.21.0"
 mongodb-migrations = "^1.3.1"
 interlink = {git = "https://github.com/interTwin-eu/interLink.git", rev = "0.3.0", subdirectory = "example"}
+pyhelm3 = "^0.3.4"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.1.0"

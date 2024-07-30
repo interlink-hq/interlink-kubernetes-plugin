@@ -19,7 +19,11 @@ RUN apt -y install zsh && \
     cd ezsh && ./install.sh -c
 
 # App packages
-# RUN apt -y install libmagic-dev
+RUN apt -y install apt-transport-https
+RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+    apt update && \
+    apt install helm
 
 # Upgrade pip
 RUN python -m pip install --upgrade pip

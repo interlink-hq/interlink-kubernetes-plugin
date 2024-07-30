@@ -1134,6 +1134,21 @@ files = [
 windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
+name = "pyhelm3"
+version = "0.3.4"
+description = "Python library for managing Helm releases using Helm 3."
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyhelm3-0.3.4-py3-none-any.whl", hash = "sha256:3160c7c3621648e18feed60a65fd4445a134e9f0756c0facf962e55f4806de4f"},
+    {file = "pyhelm3-0.3.4.tar.gz", hash = "sha256:dd3496129ec93535a4ff7095d72515f08b99b0189f1e5a1b26d55bb2a5c33e3b"},
+]
+
+[package.dependencies]
+pydantic = "*"
+pyyaml = "*"
+
+[[package]]
 name = "pylint"
 version = "3.2.6"
 description = "python code static checker"
@@ -1800,4 +1815,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "84d0562386741d0a56001a0c3fb72c2edb51618b8c53d756854d6cf93224ac58"
+content-hash = "e1f46fc6c32f5ec43e886edbf4951598130368bead82e3a8fe5de6c3a8eddaf8"

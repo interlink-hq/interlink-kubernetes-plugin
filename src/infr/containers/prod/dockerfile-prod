@@ -1,0 +1,28 @@
+FROM python:3.12.3
+
+# Arguments for the build
+# ARG EXAMPLE_ARG=4.0.0
+
+# To avoid interaction with apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+# Set default shell to /bin/bash
+# https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
+SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+
+# App packages
+RUN apt -y install apt-transport-https
+RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
+    apt update && \
+    apt install helm
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Install pip requirements
+COPY infr/containers/dev/requirements.txt /tmp/pip-tmp/
+RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
+    && rm -rf /tmp/pip-tmp
+
+# Install other dependencies (not managed by poetry)
+RUN pip install kubernetes-stubs-elephant-fork==29.0.0

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bastion.fullname" . }}
+  name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
     interlink/role: {{ include "bastion.name" . }}
@@ -34,8 +34,8 @@ spec:
             - name: SSH_DEPLOY_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "bastion.fullname" . }}
+                  name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
                   key: SSH_PRIVATE_KEY
           envFrom:
             - configMapRef:
-                name: {{ include "bastion.fullname" . }}
+                name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}

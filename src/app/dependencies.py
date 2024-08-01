@@ -11,6 +11,7 @@ from kubernetes import client as k
 from kubernetes.client.api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
 from kubernetes.config import kube_config
+from pyhelm3 import Client as HelmClient
 
 from app.common.config import Config, Option
 from app.common.logger_manager import LoggerManager
@@ -21,8 +22,9 @@ from app.services.kubernetes_plugin_service import KubernetesPluginService
 class InjectorModule(Module):
     """Configure Injector bindings, i.e. how dependencies are provided.
 
-    Note: bindings provide instances (within the given scope) when invoking `Injector.get(MyClass)`,
-    if no binding is defined for `MyClass` then a fresh new instance is created (resolving constructor
+    Note: bindings provide instances when invoking `Injector.get(MyClass)`.
+    Bindings are required to provide instances within a given scope (e.g. singleton).
+    If no binding is defined for `MyClass` then a fresh new instance is created (resolving constructor
     injected dependencies) and returned.
     """
 
@@ -49,10 +51,15 @@ class InjectorModule(Module):
 
     @singleton
     @provider
+    def provide_helm_client(self, config: Config) -> HelmClient:
+        return HelmClient(kubeconfig=config.get(Option.K8S_KUBECONFIG_PATH))
+
+    @singleton
+    @provider
     def provide_kubernetes_plugin_service(
-        self, config: Config, logger: logging.Logger, core_api: k.CoreV1Api
+        self, config: Config, logger: logging.Logger, k_api: k.CoreV1Api, h_client: HelmClient
     ) -> KubernetesPluginService:
-        return KubernetesPluginService(config, logger, core_api)
+        return KubernetesPluginService(config, logger, k_api, h_client)
 
 
 _injector = Injector([InjectorModule()])

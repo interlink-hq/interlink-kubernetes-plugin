@@ -1,25 +1,37 @@
 
+InterLink plugin to offload the execution of a POD to a *remote* cluster.
+The plugin supports the offloading of PODs that implements HTTP microservices: a TCP Tunnel is setup to forward traffic from the *local* cluster to the *remote* cluster.
+
 # Index
 
 - [Index](#index)
+- [TODO](#todo)
 - [InterLink Kubernetes Plugin](#interlink-kubernetes-plugin)
-- [TCP-Tunnel Helm Chart](#tcp-tunnel-helm-chart)
+- [TCP-Tunnel Helm Charts](#tcp-tunnel-helm-charts)
   - [Install](#install)
     - [Install Gateway](#install-gateway)
     - [Install Bastion](#install-bastion)
     - [Check tunnel](#check-tunnel)
 
+# TODO
+
+- [ ] Add documentation to setup InterLink Kubernetes Plugin environment.
+- [ ] Write script to build docker image to run plugin.
+- [ ] Troubleshoot `pyhelm3` error when installing bastion with `install_or_upgrade_release()`.
+- [ ] Open issue to add `containerPort` support in InterLink `PodRequest` class, see `KubernetesPluginService::_get_container_ports()`.
+- [ ] Integrate [gateway](src/infr/charts/tcp-tunnel/charts/gateway) Helm chart in VirtualKubelet (?).
+- [ ] Automate the SSH key pair generation and installation (?).
+
 # InterLink Kubernetes Plugin
 
 Launch InterLink Kubernetes Plugin as follows:
 ```sh
-python -m uvicorn main:app --reload --host=0.0.0.0 --port=30400
+python -m uvicorn main:app --host=0.0.0.0 --port=30400
 ```
 
-# TCP-Tunnel Helm Chart
+# TCP-Tunnel Helm Charts
 
-Microservices offloading leverages a TCP Tunnel to forward traffic from the *local* cluster to the *remote* cluster where pods will be offloaded.
-As part of this plugin's development, folder src/infr/charts includes a Helm chart to install a TCP Tunnel for secure connections between a pair of Gateway and Bastion hosts.
+As part of this plugin's development, Helm chart [tcp-tunnel](src/infr/charts/tcp-tunnel) allows to install a TCP Tunnel for secure connections between a pair of Gateway and Bastion hosts.
 
 ## Install
 
@@ -30,50 +42,53 @@ ssh-keygen -t rsa -b 4096 -C "interlink-gateway-key" -f ./private/ssh/id_rsa
 base64 --wrap 0 ./private/ssh/id_rsa
 ```
 
-Helm chart includes two subcharts to be installed separately:
+Helm chart [tcp-tunnel](src/infr/charts/tcp-tunnel) includes two subcharts to be installed **separately**:
 - chart `gateway` to be installed on the *local* cluster
 - `bastion` chart to be installed on the *remote* cluster
 
+A single release of chart `gateway` is installed by the VirtualKubelet running in the *local* cluster and will handle multiple TCP tunnels.
+For each pod offloading request, a chart `bastion` release is installed by the InterLink Kubernetes Plugin in the *remote* cluster to setup a TCP tunnel.
+
 ### Install Gateway
 
-Install Gateway on the *local* cluster.
+Install Gateway in the *local* cluster.
 
 **Example.**
 
-Install release `msoff` (microservice offloading):
+Install release `gateway`:
 ```sh
-helm install msoff ./infr/charts/tcp-tunnel/charts/gateway \
-    --namespace myservice --create-namespace \
+helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
+    --namespace tcp-tunnel --create-namespace \
     --set ssh.publicKey="$(cat ./private/ssh/id_rsa.pub)" \
     --dry-run --debug
 ```
 
-> **Note:** option `--dry-run --debug` returns the generated template without submitting it.
+The command above deploys a Gateway pod that listens for SSH connections on port 2222, moreover a public port 30222 is exposed through a NodePort; see [values.yaml](src/infr/charts/tcp-tunnel/charts/gateway/values.yaml) for all parameters and default values. The Bastion pod will connect to that port to create a Reverse SSH tunnel.
 
-The command above deploys a Gateway pod that listens for SSH connections on public port 30222 (through a NodePort); the Bastion pod will connect through that port to create a Reverse SSH tunnel.
-
-You can specify `tunnel.service` parameters to additionally expose a public port (through a NodePort) that will be used later as the source of the TCP traffic to be forwarded through the Reverse SSH tunnel:
+For development purposes, you can specify `tunnel.service.*` parameters to additionally deploy a NodePort `sourceNodePort` that forwards traffic to Gateway port `sourcePort`: assuming a reverse tunnel from `sourcePort` has been created, this setup can be used to send external TCP traffic to `sourceNodePort` and test the tunnel:
 ```sh
-helm install msoff ./infr/charts/tcp-tunnel/charts/gateway \
-    --namespace myservice --create-namespace \
+helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
+    --namespace tcp-tunnel --create-namespace \
     --set ssh.publicKey="$(cat ./private/ssh/id_rsa.pub)" \
     --set tunnel.service.sourcePort=8181 \
     --set tunnel.service.sourceNodePort=30181 \
     --dry-run --debug
 ```
 
+> **Note:** option `--dry-run --debug` returns the generated template without submitting it.
+
 ### Install Bastion
 
-Install Bastion on the *remote* cluster.
+Install Bastion in the *remote* cluster.
 
 **Example.**
 
-Install release `msoff` (microservice offloading):
+Install release `bastion`:
 ```sh
 GATEWAY_HOST=131.154.98.96
-SERVICE_HOST=mlaas-inference-service-hep-predictor-00001.mlaas.svc.cluster.local
-helm install msoff ./infr/charts/tcp-tunnel/charts/bastion \
-    --namespace myservice --create-namespace \
+SERVICE_HOST=test-pod-2b69e438-52e6-400c-8979-570b14857e1b.interlink-offloading-default.pod.cluster.local
+helm install bastion ./infr/charts/tcp-tunnel/charts/bastion \
+    --namespace tcp-tunnel --create-namespace \
     --set tunnel.gateway.host=${GATEWAY_HOST} \
     --set tunnel.gateway.ssh.privateKey=$(base64 --wrap 0 ./private/ssh/id_rsa ) \
     --set tunnel.service.gatewayPort=8181 \

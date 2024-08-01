@@ -27,9 +27,14 @@ class Option(Enum):
     LOG_RICH_ENABLED = ("log", "rich_enabled")
     LOG_REQUESTS_ENABLED = ("log", "requests_enabled")
 
-    K8S_API_SSL_CA_CERT = ("k8s", "api_ssl_ca_cert")
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
+    K8S_KUBERNETES_API_SSL_CA_CERT = ("k8s", "kubernetes_api_ssl_ca_cert")
     K8S_OFFLOADING_NAMESPACE = ("k8s", "offloading_namespace")
+
+    TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")
+    TCP_TUNNEL_BASTION_CHART_PATH = ("tcp_tunnel", "bastion_chart_path")
+    TCP_TUNNEL_GATEWAY_HOST = ("tcp_tunnel", "gateway_host")
+    TCP_TUNNEL_GATEWAY_SSH_PRIVATE_KEY = ("tcp_tunnel", "gateway_ssh_private_key")
 
     def __str__(self) -> str:
         return f"{self.section}.{self.key}"

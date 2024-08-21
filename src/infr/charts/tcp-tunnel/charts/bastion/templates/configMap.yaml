@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
+  name: {{ include "bastion.fullname" . }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
     interlink/role: {{ include "bastion.name" . }}

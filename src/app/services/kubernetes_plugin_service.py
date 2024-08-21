@@ -198,7 +198,7 @@ class KubernetesPluginService(BaseService):
 
     async def _install_bastion_release(self, i_pod: i.PodRequest, uninstall=False, rollback=False):
         """
-        Install/uninstall Bastion release for the given `ProdRequest`.
+        Install/uninstall Bastion release for the given `PodRequest`.
 
         Raises:
             `HelmError`,
@@ -210,14 +210,14 @@ class KubernetesPluginService(BaseService):
 
         assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
-        name = self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid)
-        namespace = self._scoped_ns(i_pod.metadata.namespace)
+        pod_name = self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid)
+        pod_ns = self._scoped_ns(i_pod.metadata.namespace)
         bastion_rel_ns = self.config.get(Option.TCP_TUNNEL_BASTION_NAMESPACE)
 
         ports = self._get_container_ports(i_pod)
 
         for port in ports:
-            bastion_rel_name = self._scoped_bastion_rel_name(port, name)
+            bastion_rel_name = self._scoped_bastion_rel_name(port, uid=i_pod.metadata.uid)
             # region uninstall
             if uninstall:
                 if not rollback:
@@ -234,18 +234,18 @@ class KubernetesPluginService(BaseService):
                         self.logger.error(helm_error)
 
                 if not rollback:
-                    self.logger.info("Delete Headless Service '%s' in '%s'", name, namespace)
+                    self.logger.info("Delete Headless Service '%s' in '%s'", pod_name, pod_ns)
                 try:
-                    self._k_api.delete_namespaced_service(name, namespace)
+                    self._k_api.delete_namespaced_service(pod_name, pod_ns)
                 except k_exceptions.ApiException as api_exception:
                     if not rollback:
                         self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
             # endregion / uninstall
             # region install
             else:
-                self.logger.info("Create Headless Service '%s' in '%s'", name, namespace)
+                self.logger.info("Create Headless Service '%s' in '%s'", pod_name, pod_ns)
                 service = k.V1Service(
-                    metadata=k.V1ObjectMeta(name=name, namespace=namespace),
+                    metadata=k.V1ObjectMeta(name=pod_name, namespace=pod_ns),
                     spec=k.V1ServiceSpec(
                         selector={
                             **_I_LABELS,
@@ -255,7 +255,7 @@ class KubernetesPluginService(BaseService):
                         ports=[k.V1ServicePort(port=port, target_port=port)],
                     ),
                 )
-                self._k_api.create_namespaced_service(namespace, service)
+                self._k_api.create_namespaced_service(pod_ns, service)
 
                 bastion_chart = await self._h_client.get_chart(self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH))
                 self.logger.info("Install release '%s' in '%s'", bastion_rel_name, bastion_rel_ns)
@@ -264,7 +264,7 @@ class KubernetesPluginService(BaseService):
                     "tunnel.gateway.ssh.privateKey": self.config.get(Option.TCP_TUNNEL_GATEWAY_SSH_PRIVATE_KEY),
                     "tunnel.service.gatewayPort": port,
                     "tunnel.service.targetPort": port,
-                    "tunnel.service.targetHost": f"{name}.{namespace}.svc",
+                    "tunnel.service.targetHost": f"{pod_name}.{pod_ns}.svc",
                 }
                 if 0 == 1:
                     # TODO not working
@@ -359,15 +359,15 @@ class KubernetesPluginService(BaseService):
         return list(container_ports)
 
     def _scoped_ns(self, name: str) -> str:
-        """Scope a K8s namespace name to the configuration option `_offloading_namespace`"""
+        """Scope a K8s namespace name to the configuration option `k8s.offloading_namespace`"""
         return f"{self._offloading_namespace}-{name}" if self._offloading_namespace else name
 
     def _scoped_obj(self, name: str, *, uid: str | None) -> str:
         """Scope a K8s object name to the related Pod's uid"""
         return f"{name}-{uid}"[:_MAX_K8S_SEGMENT_NAME] if uid else name
 
-    def _scoped_bastion_rel_name(self, port: int, pod_name: str) -> str:
-        return f"bastion-{port}-{pod_name}"[:_MAX_HELM_RELEASE_NAME]
+    def _scoped_bastion_rel_name(self, port: int, *, uid: str) -> str:
+        return f"bastion-{port}-{uid}"[:_MAX_HELM_RELEASE_NAME]
 
     def _scoped_metadata(self, metadata: k.V1ObjectMeta, source_metadata: k.V1ObjectMeta, *, uid: str | None):
         assert metadata.annotations is not None and metadata.labels is not None

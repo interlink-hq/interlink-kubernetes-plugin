@@ -24,7 +24,7 @@ metadata:
 spec:
   containers:
   - name: test-container
-    # curl "131.154.98.96:30182/params?query=test" | jq .request
+    # curl "131.154.98.96:30181/params?query=test" | jq .request
     image: ealen/echo-server
     command: ["node", "webserver"]
     resources:

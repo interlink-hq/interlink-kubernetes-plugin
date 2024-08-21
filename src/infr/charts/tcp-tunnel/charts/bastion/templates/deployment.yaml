@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
+  name: {{ include "bastion.fullname" . }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
     interlink/role: {{ include "bastion.name" . }}
@@ -27,15 +27,15 @@ spec:
             eval "$(ssh-agent -s)" &&
             echo "$SSH_DEPLOY_KEY" | ssh-add - &&
             ssh -N -R 0.0.0.0:${GATEWAY_TUNNEL_PORT}:${SERVICE_HOST}:${SERVICE_PORT} ${GATEWAY_USER}@${GATEWAY_HOST} -p ${GATEWAY_PORT}
-            # - ssh -N -R 0.0.0.0:8181:mlaas-inference-service-predictor-00001.mlaas.svc.cluster.local:80 interlink-user@131.154.98.72 -p 30222
+            # - ssh -N -R 0.0.0.0:8181:your-service.your-namespace.svc.cluster.local:80 interlink-user@131.154.98.72 -p 30222
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
             - name: SSH_DEPLOY_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
+                  name: {{ include "bastion.fullname" . }}
                   key: SSH_PRIVATE_KEY
           envFrom:
             - configMapRef:
-                name: {{ include "bastion.fullname" . }}-{{ .Values.tunnel.gateway.host }}-{{ .Values.tunnel.service.gatewayPort }}
+                name: {{ include "bastion.fullname" . }}

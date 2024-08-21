@@ -38,11 +38,11 @@ As part of this plugin's development, Helm chart [tcp-tunnel](src/infr/charts/tc
 Generate an SSH key pair:
 ```sh
 ssh-keygen -t rsa -b 4096 -C "interlink-gateway-key" -f ./private/ssh/id_rsa
-# Base64 encoding of private key:
+# later when installing the Bastion host, you'll need the Base64 encoding of private key that you can generate as follows:
 base64 --wrap 0 ./private/ssh/id_rsa
 ```
 
-Helm chart [tcp-tunnel](src/infr/charts/tcp-tunnel) includes two subcharts to be installed **separately**:
+Helm chart [tcp-tunnel](src/infr/charts/tcp-tunnel) includes two subcharts to be installed separately:
 - chart `gateway` to be installed on the *local* cluster
 - `bastion` chart to be installed on the *remote* cluster
 
@@ -63,9 +63,11 @@ helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
     --dry-run --debug
 ```
 
-The command above deploys a Gateway pod that listens for SSH connections on port 2222, moreover a public port 30222 is exposed through a NodePort; see [values.yaml](src/infr/charts/tcp-tunnel/charts/gateway/values.yaml) for all parameters and default values. The Bastion pod will connect to that port to create a Reverse SSH tunnel.
+The command above deploys a Gateway pod that listens for SSH connections on port 2222, moreover a public port 30222 is exposed through a NodePort.
+The Bastion pod will connect to public port 30222 to create a Reverse SSH Tunnel.
+See [values.yaml](src/infr/charts/tcp-tunnel/charts/gateway/values.yaml) for all parameters and default values.
 
-For development purposes, you can specify `tunnel.service.*` parameters to additionally deploy a NodePort `sourceNodePort` that forwards traffic to Gateway port `sourcePort`: assuming a reverse tunnel from `sourcePort` has been created, this setup can be used to send external TCP traffic to `sourceNodePort` and test the tunnel:
+For development purposes, you can specify `tunnel.service.*` parameters to additionally deploy a NodePort `sourceNodePort` that forwards traffic to Gateway port `sourcePort`: assuming a reverse tunnel from `sourcePort` has been created, this setup can be used to send external TCP traffic to the tunnel through `<node-public-ip>:sourceNodePort`:
 ```sh
 helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
     --namespace tcp-tunnel --create-namespace \
@@ -85,26 +87,32 @@ Install Bastion in the *remote* cluster.
 
 Install release `bastion`:
 ```sh
+# Public IP/port of the Gateway host where the Reverse SSH Tunnel will be created
 GATEWAY_HOST=131.154.98.96
-SERVICE_HOST=test-pod-2b69e438-52e6-400c-8979-570b14857e1b.interlink-offloading-default.pod.cluster.local
-helm install bastion ./infr/charts/tcp-tunnel/charts/bastion \
+GATEWAY_PORT=8181
+# Name/port of the service where the Bastion host will forward traffic coming from the tunnel (it can be a service name in Bastion's kubernetes cluster)
+SERVICE_HOST=your-service.your-namespace.service.cluster.local
+SERVICE_PORT=80
+# Install Bastion host
+helm install bastion-to-your-service ./infr/charts/tcp-tunnel/charts/bastion \
     --namespace tcp-tunnel --create-namespace \
     --set tunnel.gateway.host=${GATEWAY_HOST} \
     --set tunnel.gateway.ssh.privateKey=$(base64 --wrap 0 ./private/ssh/id_rsa ) \
-    --set tunnel.service.gatewayPort=8181 \
+    --set tunnel.service.gatewayPort=${GATEWAY_PORT} \
     --set tunnel.service.targetHost=${SERVICE_HOST} \
-    --set tunnel.service.targetPort=80 \
+    --set tunnel.service.targetPort=${SERVICE_PORT} \
     --dry-run --debug
 ```
 
 ### Check tunnel
 
-Check whether TCP port 30181 is open on ${GATEWAY_HOST}:
+Assuming port ${GATEWAY_PORT} on Gateway host is exposed through a NodePort 30181 (see `tunnel.service.*` parameters in [Install Gateway](#install-gateway)),
+you can check whether TCP port 30181 is open on ${GATEWAY_HOST}:
 ```sh
 nc -zv ${GATEWAY_HOST} 30181
 ```
 
-Then check whether traffic from ${GATEWAY_HOST}:30181 (*local* cluster) is forwarded to ${SERVICE_HOST}:80 in *remote* cluster.
+Then you can check whether HTTP traffic from ${GATEWAY_HOST}:30181 (the *local* cluster) is forwarded to ${SERVICE_HOST}:${SERVICE_PORT} (the *remote* cluster):
 ```sh
-curl --location "http://${GATEWAY_HOST}:30181/v1/models/mlaas-inference-service-hep"
+curl --location "http://${GATEWAY_HOST}:30181/your/path"
 ```

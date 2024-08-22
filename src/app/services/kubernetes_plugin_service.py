@@ -1,6 +1,7 @@
 import subprocess
 from logging import Logger
-from typing import Final, List
+from typing import Any, Dict, Final, List
+import json
 
 import interlink as i
 import kubernetes.client.exceptions as k_exceptions
@@ -31,7 +32,7 @@ class KubernetesPluginService(BaseService):
     _k_api: CoreV1Api
     _k_api_client: ApiClient
     _h_client: HelmClient
-    _offloading_namespace: str
+    _offloading_params: Dict[str, Any]
 
     @inject
     def __init__(self, config: Config, logger: Logger, k_api: k.CoreV1Api, h_client: HelmClient):
@@ -39,7 +40,11 @@ class KubernetesPluginService(BaseService):
         self._k_api = k_api
         self._k_api_client = k_api.api_client  # type: ignore
         self._h_client = h_client
-        self._offloading_namespace = config.get(Option.K8S_OFFLOADING_NAMESPACE)
+        self._offloading_params = {
+            "namespace": config.get(Option.OFFLOADING_NAMESPACE_PREFIX),
+            "node_selector": json.loads(config.get(Option.OFFLOADING_NODE_SELECTOR, "null")),
+            "node_tolerations": json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS, "null"))
+        }
 
     async def get_status(self, i_pods: List[i.PodRequest]) -> List[i.PodStatus]:
         status: List[i.PodStatus] = []
@@ -172,6 +177,11 @@ class KubernetesPluginService(BaseService):
 
         pod_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
         self._scoped_volumes(pod_spec, uid=i_pod.metadata.uid)
+
+        if self._offloading_params["node_selector"]:
+            pod_spec.node_selector = self._offloading_params["node_selector"]
+        if self._offloading_params["node_tolerations"]:
+            pod_spec.tolerations = [k.V1Toleration(**t) for t in self._offloading_params["node_tolerations"]]
 
         pod = k.V1Pod(
             api_version="v1",
@@ -360,7 +370,7 @@ class KubernetesPluginService(BaseService):
 
     def _scoped_ns(self, name: str) -> str:
         """Scope a K8s namespace name to the configuration option `k8s.offloading_namespace`"""
-        return f"{self._offloading_namespace}-{name}" if self._offloading_namespace else name
+        return f"{self._offloading_params["namespace"]}-{name}" if self._offloading_params["namespace"] else name
 
     def _scoped_obj(self, name: str, *, uid: str | None) -> str:
         """Scope a K8s object name to the related Pod's uid"""

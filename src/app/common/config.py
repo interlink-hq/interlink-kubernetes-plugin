@@ -29,7 +29,10 @@ class Option(Enum):
 
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
     K8S_KUBERNETES_API_SSL_CA_CERT = ("k8s", "kubernetes_api_ssl_ca_cert")
-    K8S_OFFLOADING_NAMESPACE = ("k8s", "offloading_namespace")
+
+    OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
+    OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
+    OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
 
     TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")
     TCP_TUNNEL_BASTION_CHART_PATH = ("tcp_tunnel", "bastion_chart_path")

@@ -30,6 +30,7 @@ interlink @ git+https://github.com/interTwin-eu/interLink.git@f0754cbd634ccae057
 ipromise==1.9 ; python_version >= "3.12" and python_version < "4.0"
 isort==5.13.2 ; python_version >= "3.12" and python_version < "4.0"
 jinja2==3.1.4 ; python_version >= "3.12" and python_version < "4.0"
+kubernetes-stubs-elephant-fork==30.1.0.post1 ; python_version >= "3.12" and python_version < "4.0"
 kubernetes==29.0.0 ; python_version >= "3.12" and python_version < "4.0"
 markdown-it-py==3.0.0 ; python_version >= "3.12" and python_version < "4.0"
 markupsafe==2.1.5 ; python_version >= "3.12" and python_version < "4.0"

@@ -2,13 +2,13 @@ image:
   repository: docker.io/mginfn/openssh-server
   tag: latest
   pullPolicy: IfNotPresent
-service:
-  port: 30222  
-  type: NodePort
 ssh:
   port: 2222
   publicKey:
   userName: interlink-user
+service:
+  port: 30222  
+  type: NodePort
 resources:
   requests:
     cpu: 100m

@@ -15,12 +15,10 @@ The plugin supports the offloading of PODs that implements HTTP microservices: a
 
 # TODO
 
-- [ ] Add documentation to setup InterLink Kubernetes Plugin environment.
-- [ ] Write script to build docker image to run plugin.
+- [ ] Add documentation to build, configure, deploy and run InterLink Kubernetes Plugin.
 - [ ] Troubleshoot `pyhelm3` error when installing bastion with `install_or_upgrade_release()`.
 - [ ] Open issue to add `containerPort` support in InterLink `PodRequest` class, see `KubernetesPluginService::_get_container_ports()`.
-- [ ] Integrate [gateway](src/infr/charts/tcp-tunnel/charts/gateway) Helm chart in VirtualKubelet (?).
-- [ ] Automate the SSH key pair generation and installation (?).
+- [ ] Integrate [gateway](src/infr/charts/tcp-tunnel/charts/gateway) Helm chart in VirtualKubelet.
 
 # InterLink Kubernetes Plugin
 

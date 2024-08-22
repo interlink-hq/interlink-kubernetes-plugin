@@ -33,6 +33,7 @@ autopep8 = "^2.1.0"
 isort = "^5.13.2"
 pytest = "^8.2.0"
 pytest-mock = "^3.14.0"
+kubernetes-stubs-elephant-fork = "^30.1.0.post1"
 
 [build-system]
 requires = ["poetry-core"]

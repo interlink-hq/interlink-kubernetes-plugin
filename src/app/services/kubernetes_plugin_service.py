@@ -359,12 +359,11 @@ class KubernetesPluginService(BaseService):
 
         container_ports = set()
 
-        # TODO
-        # for c in pod.spec.containers or []:
-        #     for port in c.ports or []:
-        #         if port.container_port and (port.protocol is None or port.protocol.upper() == "TCP"):
-        #             container_ports.add(port.container_port)
-        container_ports.add(8181)
+        for c in pod.spec.containers or []:
+            for port in c.ports or []:
+                container_port = port.container_port if isinstance(port, k.V1ContainerPort) else port.containerPort
+                if container_port and (port.protocol is None or port.protocol.upper() == "TCP"):
+                    container_ports.add(container_port)
 
         return list(container_ports)
 

@@ -11,12 +11,16 @@ SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
 # Dev packages
 RUN apt -y update && \
-    apt -y install git wget nano less
+    apt -y install git wget nano less apt-transport-https
 RUN apt -y install bat && \
     mkdir -p ~/.local/bin && ln -s /usr/bin/batcat ~/.local/bin/bat
 RUN apt -y install zsh && \
     git clone https://github.com/jotyGill/ezsh ezsh && \
-    cd ezsh && ./install.sh -c
+    cd ezsh && ./install.sh -c && \
+    sed -i 's/# zsh-autosuggestions/zsh-autosuggestions/g' /root/.config/ezsh/ezshrc.zsh && \
+    sed -i 's/# git/git/g' /root/.config/ezsh/ezshrc.zsh
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # App packages
 RUN apt -y install apt-transport-https
@@ -29,7 +33,7 @@ RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/
 RUN python -m pip install --upgrade pip
 
 # Install pip requirements
-COPY infr/containers/dev/requirements.txt /tmp/pip-tmp/
+COPY src/infr/containers/dev/requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp
 

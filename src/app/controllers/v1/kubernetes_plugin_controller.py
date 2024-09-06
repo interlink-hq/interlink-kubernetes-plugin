@@ -39,7 +39,9 @@ COMMON_ERROR_RESPONSES: Dict[int | str, Dict[str, Any]] = {
 @controller.use()
 @controller.resource()
 class KubernetesPluginController:
-    @controller.route.get("/status", summary="Get Pods' status", responses=COMMON_ERROR_RESPONSES)
+    @controller.route.get(
+        "/status", summary="Get Pods' status", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+    )
     async def get_status(
         self,
         i_pods: List[i.PodRequest],
@@ -55,7 +57,9 @@ class KubernetesPluginController:
     ) -> str:
         return await k_service.get_logs(i_log_req)
 
-    @controller.route.post("/create", summary="Create pods", responses=COMMON_ERROR_RESPONSES)
+    @controller.route.post(
+        "/create", summary="Create pods", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+    )
     async def create_pods(
         self,
         i_pods_with_volumes: List[i.Pod],

@@ -1,7 +1,7 @@
+import json
 import subprocess
 from logging import Logger
 from typing import Any, Dict, Final, List
-import json
 
 import interlink as i
 import kubernetes.client.exceptions as k_exceptions
@@ -19,9 +19,10 @@ from app.entities import mappers
 from .base_service import BaseService
 
 _I_SRC_UID_KEY: Final = "interlink/source.uid"
+_I_SRC_POD_UID_KEY: Final = "interlink/source.pod_uid"
 _I_SRC_NAME_KEY: Final = "interlink/source.name"
 _I_SRC_NS_KEY: Final = "interlink/source.namespace"
-_I_LABELS: Final = {"interlink": "offloading"}
+_I_COMMON_LABELS: Final = {"interlink": "offloading"}
 
 _MAX_K8S_SEGMENT_NAME: Final = 63
 _MAX_HELM_RELEASE_NAME: Final = 53
@@ -43,7 +44,7 @@ class KubernetesPluginService(BaseService):
         self._offloading_params = {
             "namespace": config.get(Option.OFFLOADING_NAMESPACE_PREFIX),
             "node_selector": json.loads(config.get(Option.OFFLOADING_NODE_SELECTOR, "null")),
-            "node_tolerations": json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS, "null"))
+            "node_tolerations": json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS, "null")),
         }
 
     async def get_status(self, i_pods: List[i.PodRequest]) -> List[i.PodStatus]:
@@ -53,20 +54,24 @@ class KubernetesPluginService(BaseService):
                 assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
                 remote_pod: k.V1Pod = self._k_api.read_namespaced_pod_status(
-                    name=self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid),
-                    namespace=self._scoped_ns(i_pod.metadata.namespace),
+                    name=self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid),
+                    namespace=self._scope_ns(i_pod.metadata.namespace),
                 )
 
                 assert remote_pod.metadata and remote_pod.status
 
                 remote_container_statuses: List[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
-                i_container_statuses: List[i.ContainerStatus] = [
-                    mappers.map_k_model_to_i_model(self._k_api_client, cs, i.ContainerStatus)
-                    for cs in remote_container_statuses
-                ]
+                i_container_statuses: List[i.ContainerStatus] = []
+                for cs in remote_container_statuses:
+                    i_cs = mappers.map_k_model_to_i_model(self._k_api_client, cs, i.ContainerStatus)
+                    if cs.state and cs.state.running and cs.state.running.started_at:
+                        assert i_cs.state.running
+                        i_cs.state.running.started_at = cs.state.running.started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    i_container_statuses.append(i_cs)
 
                 i_pod_status = i.PodStatus(
-                    UID=i_pod.metadata.uid,
+                    uid=i_pod.metadata.uid,
+                    jid=remote_pod.metadata.uid,
                     name=i_pod.metadata.name,
                     namespace=i_pod.metadata.namespace,
                     containers=i_container_statuses,
@@ -86,8 +91,8 @@ class KubernetesPluginService(BaseService):
 
     async def get_logs(self, i_log_req: i.LogRequest) -> str:
         return self._k_api.read_namespaced_pod_log(
-            name=self._scoped_obj(i_log_req.PodName, uid=i_log_req.PodUID),
-            namespace=self._scoped_ns(i_log_req.Namespace),
+            name=self._scope_obj(i_log_req.pod_name, pod_uid=i_log_req.pod_uid),
+            namespace=self._scope_ns(i_log_req.namespace),
         )
 
     async def create_pods(self, i_pods_with_volumes: List[i.Pod]) -> i.CreateStruct:
@@ -101,10 +106,11 @@ class KubernetesPluginService(BaseService):
 
                 # create supported volumes
                 for i_volume in i_pod_with_volumes.container:
-                    if i_volume.configMaps:
-                        self._create_config_maps(i_volume.configMaps, uid=i_pod_with_volumes.pod.metadata.uid)
+                    assert i_pod_with_volumes.pod.metadata.uid
+                    if i_volume.config_maps:
+                        self._create_config_maps(i_volume.config_maps, pod_uid=i_pod_with_volumes.pod.metadata.uid)
                     if i_volume.secrets:
-                        self._create_secrets(i_volume.secrets, uid=i_pod_with_volumes.pod.metadata.uid)
+                        self._create_secrets(i_volume.secrets, pod_uid=i_pod_with_volumes.pod.metadata.uid)
 
                 # create pod
                 results.append(await self._create_pod_and_bastion(i_pod_with_volumes.pod))
@@ -115,10 +121,10 @@ class KubernetesPluginService(BaseService):
         return results[0]
 
     async def delete_pod(self, i_pod: i.PodRequest, rollback=False) -> str:
-        assert i_pod.metadata.name and i_pod.metadata.namespace
+        assert i_pod.metadata.uid and i_pod.metadata.name and i_pod.metadata.namespace
 
-        name = self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid)
-        namespace = self._scoped_ns(i_pod.metadata.namespace)
+        name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
+        namespace = self._scope_ns(i_pod.metadata.namespace)
 
         if not rollback:
             self.logger.info("Delete Pod '%s' in '%s'", name, namespace)
@@ -132,8 +138,8 @@ class KubernetesPluginService(BaseService):
 
         if i_pod.spec and i_pod.spec.volumes:
             for volume in i_pod.spec.volumes:
-                if volume.configMap:
-                    scoped_name = self._scoped_obj(volume.configMap.name, uid=i_pod.metadata.uid)
+                if volume.config_map:
+                    scoped_name = self._scope_obj(volume.config_map.name, pod_uid=i_pod.metadata.uid)
                     if not rollback:
                         self.logger.info("Delete ConfigMap '%s' in '%s'", scoped_name, namespace)
                     try:
@@ -142,7 +148,7 @@ class KubernetesPluginService(BaseService):
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
                 if volume.secret:
-                    scoped_name = self._scoped_obj(volume.secret.secretName, uid=i_pod.metadata.uid)
+                    scoped_name = self._scope_obj(volume.secret.secret_name, pod_uid=i_pod.metadata.uid)
                     if not rollback:
                         self.logger.info("Delete Secret '%s' in '%s'", scoped_name, namespace)
                     try:
@@ -154,9 +160,9 @@ class KubernetesPluginService(BaseService):
         return "Pod deleted"
 
     def _create_offloading_namespace(self, name: str):
-        scoped_ns = self._scoped_ns(name)
+        scoped_ns = self._scope_ns(name)
         namespaces: k.V1NamespaceList = self._k_api.list_namespace(
-            label_selector=",".join([f"{key}={value}" for key, value in _I_LABELS.items()])
+            label_selector=",".join([f"{key}={value}" for key, value in _I_COMMON_LABELS.items()])
         )
         assert isinstance(namespaces.items, list)
         if _.find(namespaces.items, lambda item: item.metadata.name == scoped_ns if item.metadata else False):
@@ -166,17 +172,19 @@ class KubernetesPluginService(BaseService):
                 k.V1Namespace(
                     api_version="v1",
                     kind="Namespace",
-                    metadata=k.V1ObjectMeta(name=scoped_ns, labels=_I_LABELS),
+                    metadata=k.V1ObjectMeta(name=scoped_ns, labels=_I_COMMON_LABELS),
                 )
             )
             self.logger.info("Namespace '%s' created", scoped_ns)
 
     async def _create_pod_and_bastion(self, i_pod: i.PodRequest) -> i.CreateStruct:
+        assert i_pod.metadata.uid
+
         metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.metadata, k.V1ObjectMeta)
-        self._scoped_metadata(metadata, metadata, uid=i_pod.metadata.uid)
+        self._scope_metadata(metadata, metadata, pod_uid=i_pod.metadata.uid)
 
         pod_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
-        self._scoped_volumes(pod_spec, uid=i_pod.metadata.uid)
+        self._scope_volumes_and_config_maps(pod_spec, pod_uid=i_pod.metadata.uid)
 
         if self._offloading_params["node_selector"]:
             pod_spec.node_selector = self._offloading_params["node_selector"]
@@ -197,7 +205,7 @@ class KubernetesPluginService(BaseService):
 
         assert i_pod.metadata.uid and remote_pod.metadata and remote_pod.metadata.uid
 
-        create_result = i.CreateStruct(PodUID=i_pod.metadata.uid, PodJID=remote_pod.metadata.uid)
+        create_result = i.CreateStruct(pod_uid=i_pod.metadata.uid, pod_jid=remote_pod.metadata.uid)
         self.logger.info(
             "Pod '%s' in '%s' created, with result: %s",
             remote_pod.metadata.name,
@@ -220,14 +228,14 @@ class KubernetesPluginService(BaseService):
 
         assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
-        pod_name = self._scoped_obj(i_pod.metadata.name, uid=i_pod.metadata.uid)
-        pod_ns = self._scoped_ns(i_pod.metadata.namespace)
+        pod_name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
+        pod_ns = self._scope_ns(i_pod.metadata.namespace)
         bastion_rel_ns = self.config.get(Option.TCP_TUNNEL_BASTION_NAMESPACE)
 
         ports = self._get_container_ports(i_pod)
 
         for port in ports:
-            bastion_rel_name = self._scoped_bastion_rel_name(port, uid=i_pod.metadata.uid)
+            bastion_rel_name = self._scope_bastion_rel_name(port, pod_uid=i_pod.metadata.uid)
             # region uninstall
             if uninstall:
                 if not rollback:
@@ -258,8 +266,8 @@ class KubernetesPluginService(BaseService):
                     metadata=k.V1ObjectMeta(name=pod_name, namespace=pod_ns),
                     spec=k.V1ServiceSpec(
                         selector={
-                            **_I_LABELS,
-                            _I_SRC_UID_KEY: i_pod.metadata.uid,
+                            **_I_COMMON_LABELS,
+                            _I_SRC_POD_UID_KEY: i_pod.metadata.uid,
                         },
                         cluster_ip="None",  # headless service
                         ports=[k.V1ServicePort(port=port, target_port=port)],
@@ -303,19 +311,19 @@ class KubernetesPluginService(BaseService):
                     self.logger.debug(result)
             # endregion / install
 
-    def _create_config_maps(self, i_config_maps: List[i.ConfigMap], *, uid: str | None) -> List[k.V1ConfigMap]:
+    def _create_config_maps(self, i_config_maps: List[i.ConfigMap], *, pod_uid: str) -> List[k.V1ConfigMap]:
         results = []
 
         for i_config_map in i_config_maps:
             metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_config_map.metadata, k.V1ObjectMeta)
-            self._scoped_metadata(metadata, metadata, uid=uid)
+            self._scope_metadata(metadata, metadata, pod_uid=pod_uid)
 
             config_map = k.V1ConfigMap(
                 api_version="v1",
                 kind="ConfigMap",
                 metadata=metadata,
                 data=i_config_map.data,
-                binary_data=i_config_map.binaryData,
+                binary_data=i_config_map.binary_data,
                 immutable=i_config_map.immutable,
             )
 
@@ -329,19 +337,19 @@ class KubernetesPluginService(BaseService):
             results.append(remote_config_map)
         return results
 
-    def _create_secrets(self, i_secrets: List[i.Secret], *, uid: str | None) -> List[k.V1Secret]:
+    def _create_secrets(self, i_secrets: List[i.Secret], *, pod_uid: str) -> List[k.V1Secret]:
         results = []
 
         for i_secret in i_secrets:
             metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_secret.metadata, k.V1ObjectMeta)
-            self._scoped_metadata(metadata, metadata, uid=uid)
+            self._scope_metadata(metadata, metadata, pod_uid=pod_uid)
 
             secret = k.V1Secret(
                 api_version="v1",
                 kind="Secret",
                 metadata=metadata,
                 data=i_secret.data,
-                string_data=i_secret.stringData,
+                string_data=i_secret.string_data,
                 immutable=i_secret.immutable,
                 type=i_secret.type,
             )
@@ -361,65 +369,88 @@ class KubernetesPluginService(BaseService):
 
         for c in pod.spec.containers or []:
             for port in c.ports or []:
-                container_port = port.container_port if isinstance(port, k.V1ContainerPort) else port.containerPort
+                container_port = port.container_port
                 if container_port and (port.protocol is None or port.protocol.upper() == "TCP"):
                     container_ports.add(container_port)
 
         return list(container_ports)
 
-    def _scoped_ns(self, name: str) -> str:
+    def _scope_ns(self, name: str) -> str:
         """Scope a K8s namespace name to the configuration option `k8s.offloading_namespace`"""
         return f"{self._offloading_params["namespace"]}-{name}" if self._offloading_params["namespace"] else name
 
-    def _scoped_obj(self, name: str, *, uid: str | None) -> str:
+    def _scope_obj(self, name: str, *, pod_uid: str) -> str:
         """Scope a K8s object name to the related Pod's uid"""
-        return f"{name}-{uid}"[:_MAX_K8S_SEGMENT_NAME] if uid else name
+        return f"{name}-{pod_uid}"[:_MAX_K8S_SEGMENT_NAME] if pod_uid else name
 
-    def _scoped_bastion_rel_name(self, port: int, *, uid: str) -> str:
-        return f"bastion-{port}-{uid}"[:_MAX_HELM_RELEASE_NAME]
+    def _scope_bastion_rel_name(self, port: int, *, pod_uid: str) -> str:
+        return f"bastion-{port}-{pod_uid}"[:_MAX_HELM_RELEASE_NAME]
 
-    def _scoped_metadata(self, metadata: k.V1ObjectMeta, source_metadata: k.V1ObjectMeta, *, uid: str | None):
+    def _scope_metadata(self, metadata: k.V1ObjectMeta, source_metadata: k.V1ObjectMeta, *, pod_uid: str):
         assert metadata.annotations is not None and metadata.labels is not None
         assert source_metadata.uid and source_metadata.name and source_metadata.namespace
 
         metadata.labels.update(
             {
-                **_I_LABELS,
-                _I_SRC_UID_KEY: source_metadata.uid,
+                **_I_COMMON_LABELS,
+                _I_SRC_POD_UID_KEY: pod_uid
             }
         )
         metadata.annotations.update(
             {
+                _I_SRC_UID_KEY: source_metadata.uid,
                 _I_SRC_NAME_KEY: source_metadata.name,
                 _I_SRC_NS_KEY: source_metadata.namespace,
             }
         )
-        metadata.namespace = self._scoped_ns(source_metadata.namespace)
-        if uid:
-            metadata.name = self._scoped_obj(source_metadata.name, uid=uid)
+        metadata.namespace = self._scope_ns(source_metadata.namespace)
+        metadata.name = self._scope_obj(source_metadata.name, pod_uid=pod_uid)
 
-    def _scoped_volumes(self, pod_spec: k.V1PodSpec, *, uid: str | None):
+    def _scope_volumes_and_config_maps(self, pod_spec: k.V1PodSpec, *, pod_uid: str):
         # region spec.volumes
         scoped_volumes: List[k.V1Volume] = []
         for volume in pod_spec.volumes or []:
             if isinstance(volume, k.V1Volume):
                 if volume.config_map:
                     assert volume.config_map.name
-                    volume.config_map.name = self._scoped_obj(volume.config_map.name, uid=uid)
+                    volume.config_map.name = self._scope_obj(volume.config_map.name, pod_uid=pod_uid)
                     scoped_volumes.append(volume)
                 if volume.secret:
                     assert volume.secret.secret_name
-                    volume.secret.secret_name = self._scoped_obj(volume.secret.secret_name, uid=uid)
+                    volume.secret.secret_name = self._scope_obj(volume.secret.secret_name, pod_uid=pod_uid)
                     scoped_volumes.append(volume)
                 if volume.empty_dir:
                     scoped_volumes.append(volume)
-        pod_spec.volumes = scoped_volumes if scoped_volumes else None
+        pod_spec.volumes = scoped_volumes or None
         # endregion
         # region spec.containers[*].volumeMounts
         for container in pod_spec.containers:
             scoped_volume_mounts: List[k.V1VolumeMount] = []
-            for volume_mount in container.volume_mounts or []:
-                if _.find(scoped_volumes, lambda v: v.name == volume_mount.name):
-                    scoped_volume_mounts.append(volume_mount)
-            container.volume_mounts = scoped_volume_mounts if scoped_volume_mounts else None
+            for vm in container.volume_mounts or []:
+                # if _.find(scoped_volumes, lambda v, _idx, _coll, vm=vm: v.name == vm.name):
+                if next((v for v in scoped_volumes if v.name == vm.name), None):
+                    scoped_volume_mounts.append(vm)
+            container.volume_mounts = scoped_volume_mounts or None
+        # endregion
+        # region spec.containers[*].env[*].value_from, spec.containers[*].env_from
+        for container in pod_spec.containers:
+            for env_var in container.env or []:
+                if value_from := env_var.value_from:
+                    if value_from.config_map_key_ref and value_from.config_map_key_ref.name:
+                        value_from.config_map_key_ref.name = self._scope_obj(
+                            value_from.config_map_key_ref.name, pod_uid=pod_uid
+                        )
+                    if value_from.secret_key_ref and value_from.secret_key_ref.name:
+                        value_from.secret_key_ref.name = self._scope_obj(
+                            value_from.secret_key_ref.name, pod_uid=pod_uid
+                        )
+            for env_from in container.env_from or []:
+                if env_from.config_map_ref and env_from.config_map_ref.name:
+                    env_from.config_map_ref.name = self._scope_obj(
+                        env_from.config_map_ref.name, pod_uid=pod_uid
+                    )
+                if env_from.secret_ref and env_from.secret_ref.name:
+                    env_from.secret_ref.name = self._scope_obj(
+                        env_from.secret_ref.name, pod_uid=pod_uid
+                    )
         # endregion

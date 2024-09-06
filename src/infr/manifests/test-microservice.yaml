@@ -4,7 +4,7 @@ metadata:
   name: test-cm
   namespace: default
 data:
-  test_cm_data: just a ConfigMap test
+  test_cm_key: just a ConfigMap test
 ---
 apiVersion: v1
 kind: Secret
@@ -13,8 +13,8 @@ metadata:
   namespace: default
 type: Opaque
 data:
-  # test_secret_data: just a Secret test
-  test_secret_data: anVzdCBhIFNlY3JldCB0ZXN0
+  # test_secret_key: just a Secret test
+  test_secret_key: anVzdCBhIFNlY3JldCB0ZXN0
 ---
 apiVersion: v1
 kind: Pod
@@ -36,13 +36,18 @@ spec:
         value: "8181"
       - name: test_data
         value: just a test
-      # TODO: is this supported?
-      # - name: test_cm_data
+      # Not supported by Interlink
+      # - name: test_cm_key
       #   valueFrom:
       #     configMapKeyRef:
       #       name: test-cm
-      #       key: test_cm_data
-    # TODO Not supported by Interlink: not forwarding Create call to sidecar
+      #       key: test_cm_key
+      # - name: test_secret_key
+      #   valueFrom:
+      #     secretKeyRef:
+      #       name: test-secret
+      #       key: test_secret_key
+    # Not supported by Interlink
     # envFrom:
     #   - configMapRef:
     #       name: test-cm

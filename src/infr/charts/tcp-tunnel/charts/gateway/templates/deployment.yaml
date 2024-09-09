@@ -22,7 +22,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.ssh.port }}
+            - containerPort: 2222
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:

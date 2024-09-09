@@ -1,4 +1,5 @@
 image:
+  # https://hub.docker.com/r/linuxserver/openssh-server
   repository: docker.io/mginfn/openssh-server
   tag: latest
   pullPolicy: IfNotPresent
@@ -18,3 +19,8 @@ resources:
     cpu: 200m
     memory: 32Mi
     # ephemeral-storage: 256Mi
+# tunnel:
+#   service:
+#     sourcePort: 8181
+#     sourceNodePort: 30181
+#     type: NodePort

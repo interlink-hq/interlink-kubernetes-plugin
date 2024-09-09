@@ -1,7 +1,27 @@
+{{- /********************** SSHd Headless Service **********************/ -}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "gateway.fullname" . }}
+  name: {{ include "gateway.fullname" . }}-{{ .Values.ssh.port }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+    interlink/role: {{ include "gateway.name" . }}
+spec:
+  type: ClusterIP
+  clusterIP: None  # headless service
+  ports:
+    - port: {{ .Values.ssh.port }}
+      targetPort: 2222
+      protocol: TCP
+  selector:
+    {{- include "gateway.selectorLabels" . | nindent 4 }}
+---
+{{- /********************** SSHd NodePort **********************/ -}}
+{{- if and .Values.service .Values.service.port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gateway.fullname" . }}-{{ .Values.service.port }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
     interlink/role: {{ include "gateway.name" . }}
@@ -9,18 +29,20 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.ssh.port }}
-      targetPort: {{ .Values.ssh.port }}
+      targetPort: 2222
       nodePort: {{ .Values.service.port }}
       protocol: TCP
   selector:
     {{- include "gateway.selectorLabels" . | nindent 4 }}
     interlink/role: {{ include "gateway.name" . }}
-{{- if and .Values.tunnel .Values.tunnel.service }}
 ---
+{{- end }}
+{{- /********************** Tunnel NodePort **********************/ -}}
+{{- if and .Values.tunnel .Values.tunnel.service }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "gateway.fullname" . }}-service-{{ .Values.tunnel.service.sourceNodePort }}
+  name: {{ include "gateway.fullname" . }}-{{ .Values.tunnel.service.sourceNodePort }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
     interlink/role: {{ include "gateway.name" . }}

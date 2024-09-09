@@ -279,6 +279,7 @@ class KubernetesPluginService(BaseService):
                 self.logger.info("Install release '%s' in '%s'", bastion_rel_name, bastion_rel_ns)
                 values = {
                     "tunnel.gateway.host": self.config.get(Option.TCP_TUNNEL_GATEWAY_HOST),
+                    "tunnel.gateway.port": self.config.get(Option.TCP_TUNNEL_GATEWAY_PORT),
                     "tunnel.gateway.ssh.privateKey": self.config.get(Option.TCP_TUNNEL_GATEWAY_SSH_PRIVATE_KEY),
                     "tunnel.service.gatewayPort": port,
                     "tunnel.service.targetPort": port,
@@ -302,6 +303,7 @@ class KubernetesPluginService(BaseService):
                         --kubeconfig {self.config.get(Option.K8S_KUBECONFIG_PATH)} \
                         --namespace tcp-tunnel --create-namespace \
                         --set tunnel.gateway.host={values["tunnel.gateway.host"]} \
+                        --set tunnel.gateway.port={values["tunnel.gateway.port"]} \
                         --set tunnel.gateway.ssh.privateKey={values["tunnel.gateway.ssh.privateKey"]} \
                         --set tunnel.service.gatewayPort={values["tunnel.service.gatewayPort"]} \
                         --set tunnel.service.targetHost={values["tunnel.service.targetHost"]} \

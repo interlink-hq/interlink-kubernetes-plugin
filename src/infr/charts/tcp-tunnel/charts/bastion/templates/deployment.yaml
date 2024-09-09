@@ -25,13 +25,13 @@ spec:
           args:
           - >-
             eval "$(ssh-agent -s)" &&
-            echo "$SSH_DEPLOY_KEY" | ssh-add - &&
+            echo "$SSH_PRIVATE_KEY" | ssh-add - &&
             ssh -N -R 0.0.0.0:${GATEWAY_TUNNEL_PORT}:${SERVICE_HOST}:${SERVICE_PORT} ${GATEWAY_USER}@${GATEWAY_HOST} -p ${GATEWAY_PORT}
-            # - ssh -N -R 0.0.0.0:8181:your-service.your-namespace.svc.cluster.local:80 interlink-user@131.154.98.72 -p 30222
+            # - ssh -N -R 0.0.0.0:8181:your-service.your-namespace.svc.cluster.local:80 interlink-user@131.154.98.96 -p 30222
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
-            - name: SSH_DEPLOY_KEY
+            - name: SSH_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "bastion.fullname" . }}

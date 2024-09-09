@@ -37,6 +37,7 @@ class Option(Enum):
     TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")
     TCP_TUNNEL_BASTION_CHART_PATH = ("tcp_tunnel", "bastion_chart_path")
     TCP_TUNNEL_GATEWAY_HOST = ("tcp_tunnel", "gateway_host")
+    TCP_TUNNEL_GATEWAY_PORT = ("tcp_tunnel", "gateway_port")
     TCP_TUNNEL_GATEWAY_SSH_PRIVATE_KEY = ("tcp_tunnel", "gateway_ssh_private_key")
 
     def __str__(self) -> str:

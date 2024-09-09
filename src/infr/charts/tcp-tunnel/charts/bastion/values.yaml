@@ -1,4 +1,5 @@
 image:
+  # https://github.com/final-gene/docker-hub-openssh
   repository: docker.io/finalgene/openssh
   tag: latest
   pullPolicy: IfNotPresent

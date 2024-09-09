@@ -5,6 +5,7 @@ FROM python:3.12.3
 
 # To avoid interaction with apt-get
 ENV DEBIAN_FRONTEND=noninteractive
+
 # Set default shell to /bin/bash
 # https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]

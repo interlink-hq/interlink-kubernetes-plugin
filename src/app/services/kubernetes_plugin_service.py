@@ -27,6 +27,8 @@ _I_COMMON_LABELS: Final = {"interlink": "offloading"}
 _MAX_K8S_SEGMENT_NAME: Final = 63
 _MAX_HELM_RELEASE_NAME: Final = 53
 
+_INSTALL_WITH_PYHELM_CLIENT: Final = False
+
 
 class KubernetesPluginService(BaseService):
 
@@ -277,6 +279,7 @@ class KubernetesPluginService(BaseService):
 
                 bastion_chart = await self._h_client.get_chart(self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH))
                 self.logger.info("Install release '%s' in '%s'", bastion_rel_name, bastion_rel_ns)
+
                 values = {
                     "tunnel.gateway.host": self.config.get(Option.TCP_TUNNEL_GATEWAY_HOST),
                     "tunnel.gateway.port": self.config.get(Option.TCP_TUNNEL_GATEWAY_PORT),
@@ -285,8 +288,9 @@ class KubernetesPluginService(BaseService):
                     "tunnel.service.targetPort": port,
                     "tunnel.service.targetHost": f"{pod_name}.{pod_ns}.svc",
                 }
-                if 0 == 1:
-                    # TODO not working
+
+                if _INSTALL_WITH_PYHELM_CLIENT:
+                    # TODO: installing with pyhelm3 is not working: SSH_PRIVATE_KEY in Kubernetes Secret is 0 bytes
                     revision = await self._h_client.install_or_upgrade_release(
                         bastion_rel_name,
                         bastion_chart,
@@ -308,9 +312,10 @@ class KubernetesPluginService(BaseService):
                         --set tunnel.service.gatewayPort={values["tunnel.service.gatewayPort"]} \
                         --set tunnel.service.targetHost={values["tunnel.service.targetHost"]} \
                         --set tunnel.service.targetPort={values["tunnel.service.targetPort"]}""".split()
-
-                    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    self.logger.debug(result)
+                    result = subprocess.run(
+                        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+                    )
+                    self.logger.debug(result.stdout)
             # endregion / install
 
     def _create_config_maps(self, i_config_maps: List[i.ConfigMap], *, pod_uid: str) -> List[k.V1ConfigMap]:
@@ -392,12 +397,7 @@ class KubernetesPluginService(BaseService):
         assert metadata.annotations is not None and metadata.labels is not None
         assert source_metadata.uid and source_metadata.name and source_metadata.namespace
 
-        metadata.labels.update(
-            {
-                **_I_COMMON_LABELS,
-                _I_SRC_POD_UID_KEY: pod_uid
-            }
-        )
+        metadata.labels.update({**_I_COMMON_LABELS, _I_SRC_POD_UID_KEY: pod_uid})
         metadata.annotations.update(
             {
                 _I_SRC_UID_KEY: source_metadata.uid,
@@ -448,11 +448,7 @@ class KubernetesPluginService(BaseService):
                         )
             for env_from in container.env_from or []:
                 if env_from.config_map_ref and env_from.config_map_ref.name:
-                    env_from.config_map_ref.name = self._scope_obj(
-                        env_from.config_map_ref.name, pod_uid=pod_uid
-                    )
+                    env_from.config_map_ref.name = self._scope_obj(env_from.config_map_ref.name, pod_uid=pod_uid)
                 if env_from.secret_ref and env_from.secret_ref.name:
-                    env_from.secret_ref.name = self._scope_obj(
-                        env_from.secret_ref.name, pod_uid=pod_uid
-                    )
+                    env_from.secret_ref.name = self._scope_obj(env_from.secret_ref.name, pod_uid=pod_uid)
         # endregion

@@ -20,9 +20,6 @@ RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/
 RUN python -m pip install --upgrade pip
 
 # Install pip requirements
-COPY infr/containers/dev/requirements.txt /tmp/pip-tmp/
+COPY infr/containers/prod/requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp
-
-# Install other dependencies (not managed by poetry)
-RUN pip install kubernetes-stubs-elephant-fork==29.0.0

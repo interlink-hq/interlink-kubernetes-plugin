@@ -28,7 +28,7 @@ class Option(Enum):
     LOG_REQUESTS_ENABLED = ("log", "requests_enabled")
 
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
-    K8S_KUBERNETES_API_SSL_CA_CERT = ("k8s", "kubernetes_api_ssl_ca_cert")
+    K8S_CLIENT_CONFIGURATION = ("k8s", "client_configuration")
 
     OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
     OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")

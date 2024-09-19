@@ -36,7 +36,6 @@ spec:
         value: "8181"
       - name: test_data
         value: just a test
-      # Not supported by Interlink
       # - name: test_cm_key
       #   valueFrom:
       #     configMapKeyRef:
@@ -47,7 +46,6 @@ spec:
       #     secretKeyRef:
       #       name: test-secret
       #       key: test_secret_key
-    # Not supported by Interlink
     # envFrom:
     #   - configMapRef:
     #       name: test-cm

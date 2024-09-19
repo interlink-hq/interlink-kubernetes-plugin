@@ -2,9 +2,10 @@
 Configure Dependency Injection
 """
 
+import json
 import logging
 from contextlib import AbstractAsyncContextManager
-from typing import List
+from typing import Any, Dict, List
 
 from injector import Injector, Module, provider, singleton
 from kubernetes import client as k
@@ -39,9 +40,39 @@ class InjectorModule(Module):
     @singleton
     @provider
     def provide_kubernetes_core_api(self, config: Config) -> k.CoreV1Api:
-        configuration = k.Configuration()
-        # if config.get(Option.K8S_API_SSL_CA_CERT):
-        #     configuration.ssl_ca_cert = config.get(Option.K8S_API_SSL_CA_CERT)
+        configuration = k.Configuration()  # type: ignore
+
+        if config.get(Option.K8S_CLIENT_CONFIGURATION):
+            config_data: Dict[str, Any] = json.loads(config.get(Option.K8S_CLIENT_CONFIGURATION))
+            for key, value in config_data.items():
+                setattr(configuration, key, value)
+
+        # In Kubernetes, mutual TLS (mTLS) is used to secure communication between various components:
+        # - Client-Server Communication:
+        #     - When a client (e.g., kubectl, kubelet) tries to communicate with the server (e.g., the k8s API server),
+        #       both parties authenticate each other using certificates.
+        #     - The client presents its client.crt to the server.
+        #     - The server verifies this client certificate using its ca.crt.
+        #     - Similarly, the server presents its server.crt to the client.
+        #     - The client verifies the server’s certificate using its ca.crt.
+        # - Mutual Trust:
+        #     - The CA certificate (ca.crt) is crucial in this process because both the client and server certificates
+        #       are signed by a common CA. This ensures that both parties can trust each other based on the CA's
+        #       signature.
+        #
+        # The CA is the issuer/signer of both server (e.g., k8s API server) and client (e.g., kubectl or kubelet) certs.
+        #   Set SSL CA cert to prevent the following error:
+        #   "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate".
+        #   Note: this cert corresponds to clusters[*].cluster.certificate-authority-data in kubeconfig.yaml.
+        # configuration.ssl_ca_cert = "private/k8/ca.crt"
+        # Alternatively, disable SSL verification, but you'll get the following warning:
+        #   "InsecureRequestWarning: Unverified HTTPS request is being made to host '192.84.129.37'"
+        #   configuration.verify_ssl = True
+        # The client cert is used by clients to authenticate themselves to servers.
+        # Set client cert and private key, to prevent 401 errors.
+        #   Note: these files correspond to users[*].user.client-certificate/key-data in kubeconfig.yaml.
+        # configuration.cert_file = "private/k8s/client.crt"
+        # configuration.key_file = "private/k8s/client.key"
 
         api_client = ApiClient(configuration)
         kube_config.load_kube_config(

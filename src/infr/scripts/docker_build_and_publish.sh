@@ -19,7 +19,7 @@ cp -r libs ${BUILD_APP_FOLDER}/
 cp -r infr/scripts ${BUILD_APP_FOLDER}/
 
 # Export dependencies
-poetry export --without-hashes --with kubeflow -f requirements.txt -o ${BUILD_CTX_FOLDER}/requirements.txt
+poetry export --without dev --without-hashes -f requirements.txt -o ${BUILD_CTX_FOLDER}/requirements.txt
 
 # Build docker image
 cd ${BUILD_CTX_FOLDER}

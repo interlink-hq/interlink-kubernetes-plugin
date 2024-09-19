@@ -1,5 +1,5 @@
 {
-	"name": "interlink-ms-plugin",
+	"name": "interlink-kubernetes-plugin",
 	"build": {
 		"dockerfile": "dockerfile-dev",
 		"context": "..",

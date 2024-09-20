@@ -92,9 +92,19 @@ class KubernetesPluginService(BaseService):
         return status
 
     async def get_logs(self, i_log_req: i.LogRequest) -> str:
+        """
+        Logs are new-line separated strings, e.g.:
+        '2024-09-20T09:26:33.653884634+02:00 Listening on port 8181.\n
+         2024-09-20T09:31:26.751801413+02:00 {"name": "test"}\n
+        """
         return self._k_api.read_namespaced_pod_log(
             name=self._scope_obj(i_log_req.pod_name, pod_uid=i_log_req.pod_uid),
             namespace=self._scope_ns(i_log_req.namespace),
+            timestamps=i_log_req.opts.timestamps,
+            previous=i_log_req.opts.previous,
+            tail_lines=i_log_req.opts.tail_lines or None,
+            limit_bytes=i_log_req.opts.limit_bytes or None,
+            since_seconds=i_log_req.opts.since_seconds or None
         )
 
     async def create_pods(self, i_pods_with_volumes: List[i.Pod]) -> i.CreateStruct:
@@ -159,7 +169,7 @@ class KubernetesPluginService(BaseService):
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
 
-        return "Pod deleted"
+        return f"Pod '{i_pod.metadata.uid}' deleted"
 
     def _create_offloading_namespace(self, name: str):
         scoped_ns = self._scope_ns(name)

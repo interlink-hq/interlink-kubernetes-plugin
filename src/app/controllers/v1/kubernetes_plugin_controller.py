@@ -4,6 +4,7 @@ import interlink as i
 
 from fastapi import APIRouter, Depends
 from fastapi_router_controller import Controller
+from fastapi.responses import PlainTextResponse
 
 from app.controllers.common.dto import ApiErrorResponseDto
 from app.dependencies import get_kubernetes_plugin_service
@@ -54,8 +55,8 @@ class KubernetesPluginController:
         self,
         i_log_req: i.LogRequest,
         k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
-    ) -> str:
-        return await k_service.get_logs(i_log_req)
+    ) -> PlainTextResponse:
+        return PlainTextResponse(await k_service.get_logs(i_log_req))
 
     @controller.route.post(
         "/create", summary="Create pods", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES

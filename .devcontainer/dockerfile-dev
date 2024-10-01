@@ -33,7 +33,7 @@ RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/
 # Upgrade pip
 RUN python -m pip install --upgrade pip
 
-# Install pip requirements
+# Install python requirements
 COPY src/infr/containers/dev/requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp

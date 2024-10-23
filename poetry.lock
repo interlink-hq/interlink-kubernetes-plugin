@@ -628,8 +628,8 @@ pydantic = "*"
 [package.source]
 type = "git"
 url = "https://github.com/interTwin-eu/interLink.git"
-reference = "0.3.1-rc1"
-resolved_reference = "147b59e1dddf8a8c7d6f5d645cf5e814c6f03517"
+reference = "0.3.1-patch1"
+resolved_reference = "244c5f16921bfa4c978c92062b32d7b7bbc9a372"
 subdirectory = "example"
 
 [[package]]
@@ -1854,4 +1854,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "f0e0c0f7baf244759c6e194e6c588d29fb3cd6cdd776a081954ea6cb9558fe98"
+content-hash = "eef37b15e4b4f8feb12cae5a4235c4e0a803f687b85ac078837c026725454394"

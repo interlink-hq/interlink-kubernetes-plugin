@@ -102,9 +102,9 @@ class KubernetesPluginService(BaseService):
             namespace=self._scope_ns(i_log_req.namespace),
             timestamps=i_log_req.opts.timestamps,
             previous=i_log_req.opts.previous,
-            tail_lines=i_log_req.opts.tail_lines or None,
+            tail_lines=i_log_req.opts.tail or None,
             limit_bytes=i_log_req.opts.limit_bytes or None,
-            since_seconds=i_log_req.opts.since_seconds or None
+            since_seconds=i_log_req.opts.since_seconds or None,
         )
 
     async def create_pods(self, i_pods_with_volumes: List[i.Pod]) -> i.CreateStruct:

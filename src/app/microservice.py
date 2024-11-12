@@ -4,20 +4,21 @@ FastAPI entry point: load controllers and start the app.
 
 from contextlib import asynccontextmanager
 from http import HTTPStatus
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi_router_controller import Controller
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.common.config import Option
-from app.utilities.async_utilities import manage_contexts
 from app.common.error_types import ApplicationError
+from app.utilities.async_utilities import manage_contexts
 
 from . import controllers
-from .dependencies import get_config, get_lifespan_async_context_managers, get_logger
+from .dependencies import get_config, get_lifespan_async_context_managers, get_logger, preload_dependencies
 
+preload_dependencies()
 config = get_config()
 logger = get_logger()
 
@@ -53,6 +54,7 @@ app = FastAPI(
 # ]
 
 # app.add_middleware(
+#     # fastapi.middleware.cors.CORSMiddleware
 #     CORSMiddleware,
 #     allow_origins=_ALLOWED_ORIGINS,
 #     allow_credentials=True,

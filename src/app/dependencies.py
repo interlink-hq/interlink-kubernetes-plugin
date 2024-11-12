@@ -27,6 +27,8 @@ class InjectorModule(Module):
     Bindings are required to provide instances within a given scope (e.g. singleton).
     If no binding is defined for `MyClass` then a fresh new instance is created (resolving constructor
     injected dependencies) and returned.
+
+    See https://github.com/python-injector/injector/blob/master/docs/terminology.rst.
     """
 
     def configure(self, binder):
@@ -112,6 +114,11 @@ def get_kubernetes_plugin_service() -> KubernetesPluginService:
 
 def get_lifespan_async_context_managers() -> List[AbstractAsyncContextManager]:
     return []
+
+
+def preload_dependencies() -> None:
+    ...
+    # _injector.get(YourTypeName)
 
 
 # endregion / Public Injector instances

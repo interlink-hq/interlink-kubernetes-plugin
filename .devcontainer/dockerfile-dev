@@ -3,6 +3,7 @@ FROM python:3.12.3
 # Arguments for the build
 # ARG EXAMPLE_ARG=4.0.0
 
+ENV ENVIRONMENT=dev
 # To avoid interaction with apt-get
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -24,7 +25,6 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # App packages
-RUN apt -y install apt-transport-https
 RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
     apt update && \
@@ -34,7 +34,7 @@ RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/
 RUN python -m pip install --upgrade pip
 
 # Install python requirements
-COPY src/infr/containers/dev/requirements.txt /tmp/pip-tmp/
+COPY src/infr/containers/${ENVIRONMENT}/requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp
 

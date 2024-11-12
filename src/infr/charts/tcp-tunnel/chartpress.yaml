@@ -1,0 +1,11 @@
+charts:
+  - name: gateway
+    chartPath: tcp-tunnel/charts/gateway
+    repo:
+      git: interTwin-eu/interlink-helm-chart
+      published: https://intertwin-eu.github.io/interlink-helm-chart/
+  - name: bastion
+    chartPath: tcp-tunnel/charts/bastion
+    repo:
+      git: interTwin-eu/interlink-helm-chart
+      published: https://intertwin-eu.github.io/interlink-helm-chart/

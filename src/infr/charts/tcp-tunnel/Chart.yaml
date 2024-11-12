@@ -1,7 +1,0 @@
-apiVersion: v2
-name: tcp-tunnel
-description: TCP Tunnel for secure connections between Gateway and Bastion hosts
-
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

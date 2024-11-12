@@ -5,6 +5,7 @@ FROM python:3.12.3
 
 # To avoid interaction with apt-get
 ENV DEBIAN_FRONTEND=noninteractive
+
 # Set default shell to /bin/bash
 # https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
@@ -20,6 +21,6 @@ RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/
 RUN python -m pip install --upgrade pip
 
 # Install pip requirements
-COPY infr/containers/prod/requirements.txt /tmp/pip-tmp/
+COPY requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp

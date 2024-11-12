@@ -1,12 +1,14 @@
-Helm chart to install a TCP Tunnel for secure connections between a pair of Gateway and Bastion hosts.
+Helm charts to install a TCP Tunnel for secure connections between a pair of Gateway and Bastion hosts.
 
-This chart includes two subcharts to be installed separately:
+This folder includes two subcharts to be installed separately:
 - `gateway` chart to be installed in the *local* cluster
 - `bastion` chart to be installed in the *remote* cluster
 
 Notes:
-- a single release of chart `gateway` has to be installed in the *local* cluster and will handle multiple TCP tunnels;
-- for each pod offloading request, a chart `bastion` release has to be installed in the *remote* cluster to setup the TCP tunnel.
+- a single release of `gateway` chart has to be installed in the *local* cluster and will handle multiple TCP tunnels;
+- for each pod deployment in the *remote* cluster, a `bastion` chart release has to be installed in the *remote* cluster to open the TCP tunnel.
+
+![Diagram of TCP Tunnel](./diagram.png)
 
 # Index
 
@@ -33,7 +35,7 @@ Install Gateway in the *local* cluster.
 
 Install release `gateway`:
 ```sh
-helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
+helm install gateway interlink-repo/tcp-tunnel/charts/gateway \
     --namespace tcp-tunnel --create-namespace \
     --set ssh.publicKey="$(cat ./private/ssh/id_rsa.pub)" \
     --set ssh.port=2222 \
@@ -47,7 +49,7 @@ See [values.yaml](src/infr/charts/tcp-tunnel/charts/gateway/values.yaml) for all
 
 For development purposes, you can specify `tunnel.service.*` parameters to additionally deploy a NodePort `sourceNodePort` that forwards traffic to Gateway port `sourcePort`: assuming a reverse tunnel from `sourcePort` has been created, this setup can be used to send external TCP traffic to the tunnel through `<node-public-ip>:sourceNodePort`:
 ```sh
-helm install gateway ./infr/charts/tcp-tunnel/charts/gateway \
+helm install gateway interlink-repo/tcp-tunnel/charts/gateway \
     --namespace tcp-tunnel --create-namespace \
     --set ssh.publicKey="$(cat ./private/ssh/id_rsa.pub)" \
     --set ssh.port=2222 \
@@ -76,7 +78,7 @@ GATEWAY_TUNNEL_PORT=8181
 SERVICE_HOST=your-service.your-namespace.service.cluster.local
 SERVICE_PORT=80
 # Install Bastion
-helm install bastion-to-your-service ./infr/charts/tcp-tunnel/charts/bastion \
+helm install bastion-to-your-service interlink-repo/tcp-tunnel/charts/bastion \
     --namespace tcp-tunnel --create-namespace \
     --set tunnel.gateway.host=${GATEWAY_HOST} \
     --set tunnel.gateway.port=${GATEWAY_PORT} \

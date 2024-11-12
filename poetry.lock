@@ -628,7 +628,7 @@ pydantic = "*"
 [package.source]
 type = "git"
 url = "https://github.com/interTwin-eu/interLink.git"
-reference = "0.3.1-patch1"
+reference = "0.3.1-patch2"
 resolved_reference = "244c5f16921bfa4c978c92062b32d7b7bbc9a372"
 subdirectory = "example"
 

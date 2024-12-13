@@ -36,7 +36,7 @@ def keep_fields(dikt: Dict, field_list: Union[Iterable[str], Any]) -> Dict:
     return dikt
 
 
-def map_keys_deep(dikt: t.Mapping[T, T2], iteratee: t.Callable[[T2, T, t.Dict[T, T2]], T3]) -> t.Dict[T3, T2]:
+def map_keys_deep(dikt: t.Mapping[T, T2], iteratee: t.Callable[[T2, T, t.dict[T, T2]], T3]) -> t.dict[T3, T2]:
     def recursive_map_keys(value):
         if _.is_dict(value):
             # Apply map_keys at the current level
@@ -53,7 +53,7 @@ def map_keys_deep(dikt: t.Mapping[T, T2], iteratee: t.Callable[[T2, T, t.Dict[T,
     return recursive_map_keys(dikt)  # type: ignore
 
 
-def map_key_names(dikt: t.Mapping[str, T], key_map: Dict[str, str], deep=False, reverse=False) -> t.Mapping[str, T]:
+def map_key_names(dikt: t.Mapping[str, T], key_map: dict[str, str], deep=False, reverse=False) -> t.Mapping[str, T]:
     if reverse:
         key_map = {v: k for k, v in key_map.items()}
     if deep:

@@ -1,20 +1,20 @@
 import json
 import argparse
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 def check_required_args(
     parser: argparse.ArgumentParser,
     namespace: argparse.Namespace,
     *required_args,
-    arg_values: Optional[List[Any]] = None,
+    arg_values: Optional[list[Any]] = None,
 ) -> None:
     """Check required arguments
 
     Args:
         parser (argparse.ArgumentParser): The parser object.
         namespace (argparse.Namespace): The namespace object containing parsed arguments.
-        arg_values (Optional[List[Any]], optional): Expected values for required args. Defaults to None.
+        arg_values (Optional[list[Any]], optional): Expected values for required args. Defaults to None.
     """
     missing_args = list()
     if arg_values is None:
@@ -28,7 +28,7 @@ def check_required_args(
         parser.error(f"Missing required args: {missing_args}")
 
 
-def parse_encoded_parameters(parameters: Dict[str, Any] | None, key: str) -> Dict[str, Any]:
+def parse_encoded_parameters(parameters: dict[str, Any] | None, key: str) -> dict[str, Any]:
     """Parse ecoded parameters.
     Return empty object `{}` if no parameters with the given key were found."""
     if parameters and parameters.get(key):

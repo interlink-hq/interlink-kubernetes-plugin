@@ -4,18 +4,21 @@ Configure Dependency Injection
 
 import json
 import logging
+import pathlib
 from contextlib import AbstractAsyncContextManager
-from typing import Any, Dict, List
+from typing import Any
 
 from injector import Injector, Module, provider, singleton
 from kubernetes import client as k
 from kubernetes.client.api import CoreV1Api
 from kubernetes.client.api_client import ApiClient
-from kubernetes.config import kube_config
+from kubernetes.config import kube_config as k_config
 from pyhelm3 import Client as HelmClient
+from yaml import Dumper, dump
 
 from app.common.config import Config, Option
 from app.common.logger_manager import LoggerManager
+from app.entities.kube_configuration import KubeConfiguration
 from app.services.kubernetes_plugin_service import KubernetesPluginService
 
 
@@ -41,13 +44,34 @@ class InjectorModule(Module):
 
     @singleton
     @provider
-    def provide_kubernetes_core_api(self, config: Config) -> k.CoreV1Api:
-        configuration = k.Configuration()  # type: ignore
+    def provide_kube_configuration(self, config: Config) -> KubeConfiguration:
+        kubeconfig_path = pathlib.Path(config.get(Option.K8S_KUBECONFIG_PATH, "private/k8s/kubeconfig.yaml"))
+        kube_configuration = KubeConfiguration(
+            kubeconfig_path=str(kubeconfig_path),
+            client_configuration=k.Configuration(),  # type: ignore
+        )
+
+        if not kubeconfig_path.exists():
+            if not config.get(Option.K8S_KUBECONFIG):
+                raise RuntimeError(
+                    f"Kubeconfig file at path '{kubeconfig_path}' not found and no kubeconfig provided in config.ini"
+                )
+            if not kubeconfig_path.parent.exists():
+                kubeconfig_path.parent.mkdir(parents=True)
+            kubeconfig_dict: dict[str, Any] = json.loads(config.get(Option.K8S_KUBECONFIG))
+            with open(kubeconfig_path, "w", encoding="utf-8") as fp:
+                dump(kubeconfig_dict, fp, Dumper=Dumper)
 
         if config.get(Option.K8S_CLIENT_CONFIGURATION):
-            config_data: Dict[str, Any] = json.loads(config.get(Option.K8S_CLIENT_CONFIGURATION))
+            config_data: dict[str, Any] = json.loads(config.get(Option.K8S_CLIENT_CONFIGURATION))
             for key, value in config_data.items():
-                setattr(configuration, key, value)
+                setattr(kube_configuration.client_configuration, key, value)
+
+        return kube_configuration
+
+    @singleton
+    @provider
+    def provide_kubernetes_core_api(self, config: Config, kube_configuration: KubeConfiguration) -> k.CoreV1Api:
 
         # In Kubernetes, mutual TLS (mTLS) is used to secure communication between various components:
         # - Client-Server Communication:
@@ -76,16 +100,24 @@ class InjectorModule(Module):
         # configuration.cert_file = "private/k8s/client.crt"
         # configuration.key_file = "private/k8s/client.key"
 
-        api_client = ApiClient(configuration)
-        kube_config.load_kube_config(
-            config_file=config.get(Option.K8S_KUBECONFIG_PATH), client_configuration=configuration
-        )
+        api_client = ApiClient(kube_configuration.client_configuration)
+        kubeconfig_path = kube_configuration.kubeconfig_path
+
+        if kubeconfig_path:
+            k_config.load_kube_config(
+                config_file=kubeconfig_path, client_configuration=kube_configuration.client_configuration
+            )
+        else:
+            kubeconfig_dict: dict[str, Any] = json.loads(config.get(Option.K8S_KUBECONFIG))
+            k_config.load_kube_config_from_dict(
+                config_dict=kubeconfig_dict, client_configuration=kube_configuration.client_configuration
+            )
         return CoreV1Api(api_client)
 
     @singleton
     @provider
-    def provide_helm_client(self, config: Config) -> HelmClient:
-        return HelmClient(kubeconfig=config.get(Option.K8S_KUBECONFIG_PATH))
+    def provide_helm_client(self, kube_configuration: KubeConfiguration) -> HelmClient:
+        return HelmClient(kubeconfig=pathlib.Path(kube_configuration.kubeconfig_path))
 
     @singleton
     @provider
@@ -112,7 +144,7 @@ def get_kubernetes_plugin_service() -> KubernetesPluginService:
     return _injector.get(KubernetesPluginService)
 
 
-def get_lifespan_async_context_managers() -> List[AbstractAsyncContextManager]:
+def get_lifespan_async_context_managers() -> list[AbstractAsyncContextManager]:
     return []
 
 

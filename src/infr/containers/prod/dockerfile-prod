@@ -24,3 +24,12 @@ RUN python -m pip install --upgrade pip
 COPY requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp
+
+# Copy application code and data
+COPY ./app_build /interlink-kubernetes-plugin
+
+WORKDIR /interlink-kubernetes-plugin
+
+# Note: You can override docker CMD by providing command parameter to either
+# docker run or k8s spec.containers.command
+CMD ["uvicorn", "main:app", "--host=0.0.0.0", "--port=30400"]

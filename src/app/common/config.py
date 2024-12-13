@@ -2,12 +2,12 @@ import os
 from configparser import ConfigParser
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Final
+from typing import Any, ClassVar, Final
 
 import pydash as _
 
-_CONFIG_FILE_PATH: Final = "private/config.ini"
-_APP_ROOT_PATH: Final = Path(__file__).parent.parent.parent
+# E.g. on devcontainer: /workspaces/interlink-kubernetes-plugin/src
+_APP_ROOT_FULL_PATH: Final = Path(__file__).parent.parent.parent
 
 
 class Option(Enum):
@@ -28,6 +28,7 @@ class Option(Enum):
     LOG_REQUESTS_ENABLED = ("log", "requests_enabled")
 
     K8S_KUBECONFIG_PATH = ("k8s", "kubeconfig_path")
+    K8S_KUBECONFIG = ("k8s", "kubeconfig")
     K8S_CLIENT_CONFIGURATION = ("k8s", "client_configuration")
 
     OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
@@ -61,14 +62,20 @@ class Config:
     """Centrally manage application configuration properties"""
 
     _config_parser: ClassVar[ConfigParser | None] = None
-    _overrides: ClassVar[Dict[str, Dict[str, Any]]] = {}
+    _overrides: ClassVar[dict[str, dict[str, Any]]] = {}
 
     @staticmethod
     def __new__(cls):
         """Handle a singleton instance of ConfigParser"""
         if cls._config_parser is None:
+            config_file_path = os.environ.get("CONFIG_FILE_PATH")
+            if not config_file_path:
+                config_file_path = "private/config.ini"
+            if not config_file_path.startswith("/"):
+                config_file_path = str(_APP_ROOT_FULL_PATH / config_file_path)
+
             cls._config_parser = ConfigParser()
-            cls._config_parser.read(_APP_ROOT_PATH / _CONFIG_FILE_PATH, encoding="utf8")
+            cls._config_parser.read(config_file_path, encoding="utf8")
         return super(Config, cls).__new__(cls)
 
     def set(self, option: Option, value: Any) -> None:

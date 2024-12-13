@@ -1,9 +1,8 @@
-from contextlib import asynccontextmanager, AbstractAsyncContextManager
-from typing import List
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 
 @asynccontextmanager
-async def manage_contexts(managers: List[AbstractAsyncContextManager]):
+async def manage_contexts(managers: list[AbstractAsyncContextManager]):
     contexts = []
     try:
         for manager in managers:

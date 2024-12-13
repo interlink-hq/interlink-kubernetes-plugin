@@ -1,25 +1,25 @@
 """ Collection of list utility functions """
 
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 
-def omit_none(lizt: List[Any]) -> List[Any]:
+def omit_none(lizt: list[Any]) -> list[Any]:
     """Remove None elements"""
     return [elem for elem in lizt if elem is not None]
 
 
-def flatten(lizt: List[Any], exclude_none: Optional[bool] = True) -> List[Any]:
+def flatten(lizt: list[Any], exclude_none: Optional[bool] = True) -> list[Any]:
     """Flatten the list to one level deep"""
     result = []
     for elem in lizt:
-        if isinstance(elem, List):
+        if isinstance(elem, list):
             result.extend(elem)
         else:
             result.append(elem)
     return omit_none(result) if exclude_none else result
 
 
-def intersect(list1: Optional[List[Any]], list2: Optional[List[Any]]) -> List[Any]:
+def intersect(list1: Optional[list[Any]], list2: Optional[list[Any]]) -> list[Any]:
     """Intersect the given lists"""
     if list1 is None or list2 is None:
         return []

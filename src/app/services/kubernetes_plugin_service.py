@@ -1,7 +1,7 @@
 import json
 import subprocess
 from logging import Logger
-from typing import Any, Dict, Final, List
+from typing import Any, Final
 
 import interlink as i
 import kubernetes.client.exceptions as k_exceptions
@@ -35,7 +35,7 @@ class KubernetesPluginService(BaseService):
     _k_api: CoreV1Api
     _k_api_client: ApiClient
     _h_client: HelmClient
-    _offloading_params: Dict[str, Any]
+    _offloading_params: dict[str, Any]
 
     @inject
     def __init__(self, config: Config, logger: Logger, k_api: k.CoreV1Api, h_client: HelmClient):
@@ -49,8 +49,8 @@ class KubernetesPluginService(BaseService):
             "node_tolerations": json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS, "null")),
         }
 
-    async def get_status(self, i_pods: List[i.PodRequest]) -> List[i.PodStatus]:
-        status: List[i.PodStatus] = []
+    async def get_status(self, i_pods: list[i.PodRequest]) -> list[i.PodStatus]:
+        status: list[i.PodStatus] = []
         for i_pod in i_pods:
             try:
                 assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
@@ -62,8 +62,8 @@ class KubernetesPluginService(BaseService):
 
                 assert remote_pod.metadata and remote_pod.status
 
-                remote_container_statuses: List[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
-                i_container_statuses: List[i.ContainerStatus] = []
+                remote_container_statuses: list[k.V1ContainerStatus] = remote_pod.status.container_statuses or []
+                i_container_statuses: list[i.ContainerStatus] = []
                 for cs in remote_container_statuses:
                     i_cs = mappers.map_k_model_to_i_model(self._k_api_client, cs, i.ContainerStatus)
                     if cs.state and cs.state.running and cs.state.running.started_at:
@@ -107,8 +107,8 @@ class KubernetesPluginService(BaseService):
             since_seconds=i_log_req.opts.since_seconds or None,
         )
 
-    async def create_pods(self, i_pods_with_volumes: List[i.Pod]) -> i.CreateStruct:
-        results: List[i.CreateStruct] = []
+    async def create_pods(self, i_pods_with_volumes: list[i.Pod]) -> i.CreateStruct:
+        results: list[i.CreateStruct] = []
 
         for i_pod_with_volumes in i_pods_with_volumes:
             try:
@@ -240,6 +240,12 @@ class KubernetesPluginService(BaseService):
 
         assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
+        if not self.config.get(Option.TCP_TUNNEL_GATEWAY_HOST):
+            self.logger.warning(
+                f"TCP tunnel gateway host is not set, skipping Bastion {"un" if uninstall else ""}installation"
+            )
+            return
+
         pod_name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
         pod_ns = self._scope_ns(i_pod.metadata.namespace)
         bastion_rel_ns = self.config.get(Option.TCP_TUNNEL_BASTION_NAMESPACE)
@@ -328,7 +334,7 @@ class KubernetesPluginService(BaseService):
                     self.logger.debug(result.stdout)
             # endregion / install
 
-    def _create_config_maps(self, i_config_maps: List[i.ConfigMap], *, pod_uid: str) -> List[k.V1ConfigMap]:
+    def _create_config_maps(self, i_config_maps: list[i.ConfigMap], *, pod_uid: str) -> list[k.V1ConfigMap]:
         results = []
 
         for i_config_map in i_config_maps:
@@ -354,7 +360,7 @@ class KubernetesPluginService(BaseService):
             results.append(remote_config_map)
         return results
 
-    def _create_secrets(self, i_secrets: List[i.Secret], *, pod_uid: str) -> List[k.V1Secret]:
+    def _create_secrets(self, i_secrets: list[i.Secret], *, pod_uid: str) -> list[k.V1Secret]:
         results = []
 
         for i_secret in i_secrets:
@@ -379,7 +385,7 @@ class KubernetesPluginService(BaseService):
             results.append(remote_secret)
         return results
 
-    def _get_container_ports(self, pod: k.V1Pod | i.PodRequest) -> List[int]:
+    def _get_container_ports(self, pod: k.V1Pod | i.PodRequest) -> list[int]:
         assert pod.spec
 
         container_ports = set()
@@ -420,7 +426,7 @@ class KubernetesPluginService(BaseService):
 
     def _scope_volumes_and_config_maps(self, pod_spec: k.V1PodSpec, *, pod_uid: str):
         # region spec.volumes
-        scoped_volumes: List[k.V1Volume] = []
+        scoped_volumes: list[k.V1Volume] = []
         for volume in pod_spec.volumes or []:
             if isinstance(volume, k.V1Volume):
                 if volume.config_map:
@@ -437,7 +443,7 @@ class KubernetesPluginService(BaseService):
         # endregion
         # region spec.containers[*].volumeMounts
         for container in pod_spec.containers:
-            scoped_volume_mounts: List[k.V1VolumeMount] = []
+            scoped_volume_mounts: list[k.V1VolumeMount] = []
             for vm in container.volume_mounts or []:
                 # if _.find(scoped_volumes, lambda v, _idx, _coll, vm=vm: v.name == vm.name):
                 if next((v for v in scoped_volumes if v.name == vm.name), None):

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 IMAGE_NAME=interlink-kubernetes-plugin
-IMAGE_VERSION=0.0.1
-DOCKER_REPO="mginfn"
+IMAGE_VERSION=1.0.0
+DOCKER_REPO="docker.io/mginfn"
 
-CTX_FOLDER=infr/containers/prod
+CTX_FOLDER=src/infr/containers/prod
 CTX_APP_FOLDER=${CTX_FOLDER}/app_build
 
 echo Building image ${IMAGE_NAME}:${IMAGE_VERSION}
@@ -15,12 +15,12 @@ mkdir ${CTX_APP_FOLDER}
 
 # Copy application code and scripts
 echo Copy application code to application build folder
-cp -r src/* ${CTX_APP_FOLDER}/
-# cp -r libs ${CTX_APP_FOLDER}/
-cp -r infr/scripts ${CTX_APP_FOLDER}/
+cp -r src/app ${CTX_APP_FOLDER}/
+cp -r src/infr/charts ${CTX_APP_FOLDER}/infr/
+cp src/main.py ${CTX_APP_FOLDER}/
 
 # Export dependencies
-poetry export --without dev --without-hashes -f requirements.txt -o ${CTX_FOLDER}/requirements.txt
+poetry export --without-hashes -f requirements.txt -o ${CTX_FOLDER}/requirements.txt
 
 # Build docker image
 cd ${CTX_FOLDER}
@@ -28,7 +28,7 @@ echo Build command: docker build . -f dockerfile-prod -t ${IMAGE_NAME}:${IMAGE_V
 docker build . -f dockerfile-prod -t ${IMAGE_NAME}:${IMAGE_VERSION}
 
 # Clean up
-rm -rf app_build
+# rm -rf app_build
 
 # Push image
 echo Pushing image ${IMAGE_NAME}:${IMAGE_VERSION}

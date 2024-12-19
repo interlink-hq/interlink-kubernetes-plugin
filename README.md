@@ -29,10 +29,10 @@ rename file to *config.ini* and provide missing values, in particular:
 - offloading.node_selector: remote workloads node selector, if you want to offload resources to selected nodes;
 - offloading.node_tolerations: remote workloads node tolerations, if you want to offload resources to tainted nodes.
 
-The following properties are required for the offloading of HTTP Microservices:
+The following properties are required for the offloading of HTTP Microservices
+(see [tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md)):
 
-- tcp_tunnel.gateway_host: IP of the Gateway host where the Reverse SSH Tunnel will be created
-  (see [tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md));
+- tcp_tunnel.gateway_host: IP of the Gateway host where the Reverse SSH Tunnel will be created;
 - tcp_tunnel.gateway_port: port to reach the Gateway's SSH daemon;
 - tcp_tunnel.gateway_ssh_private_key: the SSH private key
 
@@ -45,7 +45,7 @@ docker run --rm -v ./private:/interlink-kubernetes-plugin/private -p 30400:4000 
 
 ## Microservices Offloading
 
-This plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices).
+The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices).
 
 In order to offload an HTTP Microservice, you must declare a TCP port in container's POD definition, e.g.:
 
@@ -68,7 +68,7 @@ then the plugin will setup a TCP Tunnel to forward traffic from the *local* clus
 
 ![Microservice Offloading](docs/assets/diagram-tunnel.png)
 
-The plugin leverages Helm charts at [tcp-tunnel](src/infr/charts/tcp-tunnel) to install a TCP Tunnel
+The plugin leverages Helm charts [tcp-tunnel](src/infr/charts/tcp-tunnel) to install a TCP Tunnel
 for secure connections between a pair of Gateway and Bastion hosts.
 
 Notice that the plugin takes care of installing a Bastion host in the *remote* cluster for each offloaded POD,

@@ -43,11 +43,16 @@ class KubernetesPluginService(BaseService):
         self._k_api = k_api
         self._k_api_client = k_api.api_client  # type: ignore
         self._h_client = h_client
+
         self._offloading_params = {
-            "namespace": config.get(Option.OFFLOADING_NAMESPACE_PREFIX),
-            "node_selector": json.loads(config.get(Option.OFFLOADING_NODE_SELECTOR, "null")),
-            "node_tolerations": json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS, "null")),
+            "namespace": config.get(Option.OFFLOADING_NAMESPACE_PREFIX, ""),
+            "node_selector": None,
+            "node_tolerations": None,
         }
+        if config.get(Option.OFFLOADING_NODE_SELECTOR):
+            self._offloading_params["node_selector"] = json.loads(config.get(Option.OFFLOADING_NODE_SELECTOR))
+        if config.get(Option.OFFLOADING_NODE_TOLERATIONS):
+            self._offloading_params["node_tolerations"] = json.loads(config.get(Option.OFFLOADING_NODE_TOLERATIONS))
 
     async def get_status(self, i_pods: list[i.PodRequest]) -> list[i.PodStatus]:
         status: list[i.PodStatus] = []

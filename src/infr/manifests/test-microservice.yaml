@@ -24,8 +24,8 @@ metadata:
 spec:
   containers:
   - name: test-container
-    # curl "192.135.24.45:30181/params?query=test" | jq .request
-    # wget -O- 192.135.24.45:30181/params?query=test
+    # curl "${KUBERNETES_MASTER_NODE_IP}:30181/params?query=test" | jq .request
+    # wget -O- ${KUBERNETES_MASTER_NODE_IP}:30181/params?query=test
     image: ealen/echo-server
     command: ["node", "webserver"]
     resources:

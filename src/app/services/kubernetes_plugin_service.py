@@ -113,6 +113,7 @@ class KubernetesPluginService(BaseService):
         )
 
     async def create_pods(self, i_pods_with_volumes: list[i.Pod]) -> i.CreateStruct:
+        self.logger.info("Creating Pods")
         results: list[i.CreateStruct] = []
 
         for i_pod_with_volumes in i_pods_with_volumes:
@@ -132,12 +133,14 @@ class KubernetesPluginService(BaseService):
                 # create pod
                 results.append(await self._create_pod_and_bastion(i_pod_with_volumes.pod))
             except Exception as exc:
+                self.logger.error("Got an exception while creating Pod (trigger rollback): %s", exc)
                 await self.delete_pod(i_pod_with_volumes.pod, rollback=True)
                 raise exc
 
         return results[0]
 
     async def delete_pod(self, i_pod: i.PodRequest, rollback=False) -> str:
+        self.logger.info(f"Deleting Pod (rollback={rollback})")
         assert i_pod.metadata.uid and i_pod.metadata.name and i_pod.metadata.namespace
 
         name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
@@ -299,6 +302,7 @@ class KubernetesPluginService(BaseService):
                 self._k_api.create_namespaced_service(pod_ns, service)
 
                 bastion_chart_path = self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH)
+                bastion_chart = await self._h_client.get_chart(bastion_chart_path)
                 self.logger.info("Install release '%s' in '%s'", bastion_rel_name, bastion_rel_ns)
 
                 values = {
@@ -311,8 +315,6 @@ class KubernetesPluginService(BaseService):
                 }
 
                 if _INSTALL_WITH_PYHELM_CLIENT:
-                    # TODO: get chart from local path is not working
-                    bastion_chart = await self._h_client.get_chart(bastion_chart_path)
                     # TODO: installing with pyhelm3 is not working: SSH_PRIVATE_KEY in Kubernetes Secret is 0 bytes
                     revision = await self._h_client.install_or_upgrade_release(
                         bastion_rel_name,
@@ -335,6 +337,7 @@ class KubernetesPluginService(BaseService):
                         --set tunnel.service.gatewayPort={values["tunnel.service.gatewayPort"]} \
                         --set tunnel.service.targetHost={values["tunnel.service.targetHost"]} \
                         --set tunnel.service.targetPort={values["tunnel.service.targetPort"]}""".split()
+                    self.logger.debug(f"Running command: {command}")
                     result = subprocess.run(
                         command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
                     )

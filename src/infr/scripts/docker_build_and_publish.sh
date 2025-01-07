@@ -19,8 +19,9 @@ mkdir ${CTX_APP_FOLDER}
 # Copy application code and data
 echo Copy application code to application build folder
 cp -r src/app ${CTX_APP_FOLDER}/
-cp -r src/infr/charts ${CTX_APP_FOLDER}/infr/
 cp src/main.py ${CTX_APP_FOLDER}/
+mkdir -p ${CTX_APP_FOLDER}/infr/charts
+cp -r src/infr/charts ${CTX_APP_FOLDER}/infr
 mkdir ${CTX_APP_FOLDER}/private
 cp src/private/config.sample.ini ${CTX_APP_FOLDER}/private/
 
@@ -34,7 +35,7 @@ docker build . -f dockerfile-prod -t ${IMAGE_TAG}
 echo Build done!
 
 # Clean up
-rm -rf app_build
+# rm -rf app_build
 
 # Push image
 echo Pushing image: ${IMAGE_TAG}

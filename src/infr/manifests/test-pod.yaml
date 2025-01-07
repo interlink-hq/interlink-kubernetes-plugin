@@ -7,7 +7,7 @@ spec:
   containers:
   - name: test-container
     image: busybox
-    command: ["sh", "-c", "sleep 60"]
+    command: ["sh", "-c", "i=0; while true; do echo $i; i=$((i+1)); sleep 3; done"]
     resources:
       limits:
         memory: "32Mi"

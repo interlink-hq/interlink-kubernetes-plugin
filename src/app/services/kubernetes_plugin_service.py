@@ -298,7 +298,7 @@ class KubernetesPluginService(BaseService):
                 )
                 self._k_api.create_namespaced_service(pod_ns, service)
 
-                bastion_chart = await self._h_client.get_chart(self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH))
+                bastion_chart_path = self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH)
                 self.logger.info("Install release '%s' in '%s'", bastion_rel_name, bastion_rel_ns)
 
                 values = {
@@ -311,6 +311,8 @@ class KubernetesPluginService(BaseService):
                 }
 
                 if _INSTALL_WITH_PYHELM_CLIENT:
+                    # TODO: get chart from local path is not working
+                    bastion_chart = await self._h_client.get_chart(bastion_chart_path)
                     # TODO: installing with pyhelm3 is not working: SSH_PRIVATE_KEY in Kubernetes Secret is 0 bytes
                     revision = await self._h_client.install_or_upgrade_release(
                         bastion_rel_name,
@@ -324,8 +326,8 @@ class KubernetesPluginService(BaseService):
                     )
                     self.logger.debug(f"Install completed, revision: {revision.revision}, {str(revision.status)}")
                 else:
-                    command = f"""helm install {bastion_rel_name} infr/charts/tcp-tunnel/charts/bastion \
-                        --kubeconfig {self.config.get(Option.K8S_KUBECONFIG_PATH)} \
+                    command = f"""helm install {bastion_rel_name} {bastion_chart_path} \
+                        --kubeconfig {self.config.get(Option.K8S_KUBECONFIG_PATH, "private/k8s/kubeconfig.yaml")} \
                         --namespace tcp-tunnel --create-namespace \
                         --set tunnel.gateway.host={values["tunnel.gateway.host"]} \
                         --set tunnel.gateway.port={values["tunnel.gateway.port"]} \

@@ -6,7 +6,7 @@ IMAGE_VERSION=1.0.0
 IMAGE_TAG=${IMAGE_REPO}/${IMAGE_NAME}:${IMAGE_VERSION}
 IMAGE_TAG_LATEST=${IMAGE_REPO}/${IMAGE_NAME}:latest
 
-CURR_FOLDER=$(pwd)
+ROOT_FOLDER=$(pwd)
 CTX_FOLDER=src/infr/containers/prod
 CTX_APP_FOLDER=${CTX_FOLDER}/app_build
 
@@ -34,7 +34,7 @@ docker build . -f dockerfile-prod -t ${IMAGE_TAG}
 echo Build done!
 
 # Clean up
-# rm -rf app_build
+rm -rf app_build
 
 # Push image
 echo Pushing image: ${IMAGE_TAG}
@@ -42,6 +42,15 @@ docker push ${IMAGE_TAG}
 docker tag ${IMAGE_TAG} ${IMAGE_TAG_LATEST}
 docker push ${IMAGE_TAG_LATEST}
 echo Tagged latest image: ${IMAGE_TAG_LATEST}
+echo Run with: docker run --rm -v ${ROOT_FOLDER}/src/private:/interlink-kubernetes-plugin/private -p 30400:4000 ${IMAGE_TAG} uvicorn main:app --host=0.0.0.0 --port=4000 --log-level=debug
 
-echo Run with: docker run --rm -v ${CURR_FOLDER}/src/private:/interlink-kubernetes-plugin/private -p 30400:4000 ${IMAGE_TAG} uvicorn main:app --host=0.0.0.0 --port=4000 --log-level=debug
+# Create helm chart archives.
+# Note: helm charts are currently stored as tarball in this repository, in the future
+# they will be hosted in the [interlink-helm-chart](https://github.com/interTwin-eu/interlink-helm-chart) repository.
+cd ${ROOT_FOLDER}
+echo Create helm chart archive \(to be pushed\): tcp-tunnel-gateway-v${IMAGE_VERSION}.tar.gz
+tar -czf build/charts/tcp-tunnel-gateway-v${IMAGE_VERSION}.tar.gz -C src/infr/charts/tcp-tunnel/charts/gateway .
+echo Create helm chart archive \(to be pushed\): tcp-tunnel-bastion-v${IMAGE_VERSION}.tar.gz
+tar -czf build/charts/tcp-tunnel-bastion-v${IMAGE_VERSION}.tar.gz -C src/infr/charts/tcp-tunnel/charts/bastion .
+
 echo Done!

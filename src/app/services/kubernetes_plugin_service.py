@@ -102,15 +102,22 @@ class KubernetesPluginService(BaseService):
         '2024-09-20T09:26:33.653884634+02:00 Listening on port 8181.\n
          2024-09-20T09:31:26.751801413+02:00 {"name": "test"}\n
         """
-        return self._k_api.read_namespaced_pod_log(
+        logs: str = self._k_api.read_namespaced_pod_log(
             name=self._scope_obj(i_log_req.pod_name, pod_uid=i_log_req.pod_uid),
             namespace=self._scope_ns(i_log_req.namespace),
             timestamps=i_log_req.opts.timestamps,
             previous=i_log_req.opts.previous,
+            follow=False,  # i_log_req.opts.follow,
+            _preload_content=True,  # not i_log_req.opts.follow
             tail_lines=i_log_req.opts.tail or None,
             limit_bytes=i_log_req.opts.limit_bytes or None,
             since_seconds=i_log_req.opts.since_seconds or None,
         )
+
+        # TODO if follow, you'll get a generator
+        # See also https://github.com/kubernetes-client/python/issues/199
+
+        return logs
 
     async def create_pods(self, i_pods_with_volumes: list[i.Pod]) -> i.CreateStruct:
         self.logger.info("Creating Pods")

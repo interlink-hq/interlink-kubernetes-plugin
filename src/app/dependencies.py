@@ -11,7 +11,6 @@ from typing import Any
 from injector import Injector, Module, provider, singleton
 from kubernetes import client as k
 from kubernetes.client.api import CoreV1Api
-from kubernetes.client.api_client import ApiClient
 from kubernetes.config import kube_config as k_config
 from pyhelm3 import Client as HelmClient
 from yaml import Dumper, dump
@@ -46,10 +45,7 @@ class InjectorModule(Module):
     @provider
     def provide_kube_configuration(self, config: Config) -> KubeConfiguration:
         kubeconfig_path = pathlib.Path(config.get(Option.K8S_KUBECONFIG_PATH, "private/k8s/kubeconfig.yaml"))
-        kube_configuration = KubeConfiguration(
-            kubeconfig_path=str(kubeconfig_path),
-            client_configuration=k.Configuration(),  # type: ignore
-        )
+        kube_configuration = KubeConfiguration(kubeconfig_path=str(kubeconfig_path))
 
         if not kubeconfig_path.exists():
             if not config.get(Option.K8S_KUBECONFIG):
@@ -64,6 +60,7 @@ class InjectorModule(Module):
 
         if config.get(Option.K8S_CLIENT_CONFIGURATION):
             config_data: dict[str, Any] = json.loads(config.get(Option.K8S_CLIENT_CONFIGURATION))
+            kube_configuration.client_configuration = k.Configuration()  # type: ignore
             for key, value in config_data.items():
                 setattr(kube_configuration.client_configuration, key, value)
 
@@ -99,7 +96,6 @@ class InjectorModule(Module):
         # configuration.cert_file = "private/k8s/client.crt"
         # configuration.key_file = "private/k8s/client.key"
 
-        api_client = ApiClient(kube_configuration.client_configuration)
         kubeconfig_path = kube_configuration.kubeconfig_path
 
         if kubeconfig_path:
@@ -111,7 +107,8 @@ class InjectorModule(Module):
             k_config.load_kube_config_from_dict(
                 config_dict=kubeconfig_dict, client_configuration=kube_configuration.client_configuration
             )
-        return CoreV1Api(api_client)
+
+        return CoreV1Api()
 
     @singleton
     @provider

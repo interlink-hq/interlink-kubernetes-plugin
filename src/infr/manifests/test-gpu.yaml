@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-gpu
+  namespace: default
+spec:
+  containers:
+  - name: test-container
+    image: nvidia/cuda:12.3.1-base-ubuntu22.04
+    command: ["sh", "-c", "nvidia-smi; sleep 5; exit 0"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+  restartPolicy: Never
+  nodeSelector:
+    type: virtual-kubelet
+  tolerations:
+  - key: "virtual-node.interlink/no-schedule"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+---

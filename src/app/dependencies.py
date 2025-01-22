@@ -74,13 +74,12 @@ class InjectorModule(Module):
     def provide_kubernetes_core_api(self, config: Config, kube_configuration: KubeConfiguration) -> k.CoreV1Api:
 
         # In Kubernetes, mutual TLS (mTLS) is used to secure communication between various components:
-        # - Client-Server Communication:
-        #     - When a client (e.g., kubectl, kubelet) tries to communicate with the server (e.g., the k8s API server),
-        #       both parties authenticate each other using certificates.
-        #     - The client presents its client.crt to the server.
-        #     - The server verifies this client certificate using its ca.crt.
-        #     - Similarly, the server presents its server.crt to the client.
-        #     - The client verifies the server’s certificate using its ca.crt.
+        # - Client-Server Communication: when a client (e.g., kubectl, kubelet) tries to communicate with the server
+        #   (e.g., the k8s API server), both parties authenticate each other using certificates:
+        #     - the client presents its client.crt to the server;
+        #     - the server verifies this client certificate using its ca.crt;
+        #     - similarly, the server presents its server.crt to the client;
+        #     - the client verifies the server’s certificate using its ca.crt.
         # - Mutual Trust:
         #     - The CA certificate (ca.crt) is crucial in this process because both the client and server certificates
         #       are signed by a common CA. This ensures that both parties can trust each other based on the CA's

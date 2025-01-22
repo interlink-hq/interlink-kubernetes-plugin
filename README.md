@@ -29,7 +29,8 @@ rename file to *config.ini* and provide missing values, in particular:
 
 - k8s.kubeconfig_path: path to the Kubeconfig YAML file to access the *remote* cluster, defaults to `private/k8s/kubeconfig.yaml`;
 - k8s.kubeconfig: alternatively, provide Kubeconfig inline in json format;
-- k8s.client_configuration: options to enable/disable secure client-server communication;
+- k8s.client_configuration: options to set to the underlying python Kubernetes client
+  [configuration object](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/configuration.py);
 - offloading.namespace_prefix: remote cluster namespace prefix where resources are offloaded, defaults to `offloading`;
 - offloading.node_selector: remote workloads node selector, if you want to offload resources to selected nodes;
 - offloading.node_tolerations: remote workloads node tolerations, if you want to offload resources to tainted nodes.

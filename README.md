@@ -18,6 +18,7 @@ tolerance.
     - [Install via Ansible role](#install-via-ansible-role)
   - [Microservices Offloading](#microservices-offloading)
   - [Troubleshooting](#troubleshooting)
+    - [401 Unauthorized](#401-unauthorized)
     - [certificate verify failed: unable to get local issuer certificate](#certificate-verify-failed-unable-to-get-local-issuer-certificate)
 
 ## How to Run
@@ -109,9 +110,74 @@ to start the tunnel.
 
 ## Troubleshooting
 
+### 401 Unauthorized
+
+If the plugin raises error "401 Unauthorized", check the **remote** cluster Kubeconfig YAML.
+
+The `cluster` section must include the URL of the Kubernetes API Server and the inline base64-encoded CA certificate:
+
+```yaml
+clusters:
+- cluster:
+    certificate-authority-data: <base64-encoded-CA-certificate>
+    server: https://example.com:6443
+  name: my-cluster
+```
+
+alternatively, you can provide the path to the CA certificate, but you must take care of allowing the plugin
+to read that file (e.g., you need to mount a volume when running the docker image):
+
+```yaml
+clusters:
+- name: cluster-name
+  cluster:
+    certificate-authority: /path/to/ca.crt
+    server: https://example.com:6443
+```
+
+finally, you can disable certificate verification (but you will find "InsecureRequestWarning" in plugin's logs):
+
+```yaml
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://example.com:6443
+  name: my-cluster
+```
+
+Regarding the `users` section, you must include the inline base64-encoded client certificate and key:
+
+```yaml
+users:
+- name: admin
+  user:
+    client-certificate-data: <base64-encoded-certificate>
+    client-key-data: <base64-encoded-key>
+```
+
+alternatively, you can provide the path to the client certificate and key, but you must take care of allowing the plugin
+to read that files:
+
+```yaml
+users:
+- name: admin
+  user:
+    client-certificate: /path/to/client.crt
+    client-key: /path/to/client.key
+```
+
+finally, token-based authentication is also allowed, e.g.:
+
+```yaml
+users:
+- name: admin
+  user:
+    token: <auth-token>
+```
+
 ### certificate verify failed: unable to get local issuer certificate
 
-If the plugin raises the error
+If the plugin raises error
 "certificate verify failed: unable to get local issuer certificate"
 while attempting to access the remote cluster,
 it likely indicates that your Kubernetes cluster is using self-signed x509 certificates.

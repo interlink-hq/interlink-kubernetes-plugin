@@ -4,18 +4,18 @@ metadata:
   name: {{ include "gateway.fullname" . }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "gateway.selectorLabels" . | nindent 6 }}
-      interlink/role: {{ include "gateway.name" . }}
+      interlink.io/role: {{ include "gateway.name" . }}
   template:
     metadata:
       labels:
         {{- include "gateway.labels" . | nindent 8 }}
-        interlink/role: {{ include "gateway.name" . }}
+        interlink.io/role: {{ include "gateway.name" . }}
     spec:
       containers:
         - name: openssh-server

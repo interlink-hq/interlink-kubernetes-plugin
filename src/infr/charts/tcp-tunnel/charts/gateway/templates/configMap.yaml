@@ -4,7 +4,7 @@ metadata:
   name: {{ include "gateway.fullname" . }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 data:
   PUBLIC_KEY: {{ .Values.ssh.publicKey }}
   USER_NAME: {{ .Values.ssh.userName }}

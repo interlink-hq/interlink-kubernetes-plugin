@@ -4,18 +4,18 @@ metadata:
   name: {{ include "bastion.fullname" . }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
-    interlink/role: {{ include "bastion.name" . }}
+    interlink.io/role: {{ include "bastion.name" . }}
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "bastion.selectorLabels" . | nindent 6 }}
-      interlink/role: {{ include "bastion.name" . }}
+      interlink.io/role: {{ include "bastion.name" . }}
   template:
     metadata:
       labels:
         {{- include "bastion.labels" . | nindent 8 }}
-        interlink/role: {{ include "bastion.name" . }}
+        interlink.io/role: {{ include "bastion.name" . }}
     spec:
       containers:
         - name: openssh-client

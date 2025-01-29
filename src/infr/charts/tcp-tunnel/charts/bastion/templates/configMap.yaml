@@ -4,7 +4,7 @@ metadata:
   name: {{ include "bastion.fullname" . }}
   labels:
     {{- include "bastion.labels" . | nindent 4 }}
-    interlink/role: {{ include "bastion.name" . }}
+    interlink.io/role: {{ include "bastion.name" . }}
 data:
   GATEWAY_HOST: "{{ .Values.tunnel.gateway.host }}"
   GATEWAY_PORT: "{{ .Values.tunnel.gateway.ssh.port }}"

@@ -5,7 +5,7 @@ metadata:
   name: {{ include "gateway.fullname" . }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 spec:
   type: ClusterIP
   clusterIP: None  # headless service
@@ -24,7 +24,7 @@ metadata:
   name: {{ include "gateway.fullname" . }}-{{ .Values.service.type | lower }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -34,7 +34,7 @@ spec:
       protocol: TCP
   selector:
     {{- include "gateway.selectorLabels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 ---
 {{- end }}
 {{- /********************** Tunnel NodePort **********************/ -}}
@@ -45,7 +45,7 @@ metadata:
   name: {{ include "gateway.fullname" . }}-{{ .Values.tunnel.service.sourceNodePort }}
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 spec:
   type: NodePort
   ports:
@@ -55,5 +55,5 @@ spec:
       protocol: TCP
   selector:
     {{- include "gateway.selectorLabels" . | nindent 4 }}
-    interlink/role: {{ include "gateway.name" . }}
+    interlink.io/role: {{ include "gateway.name" . }}
 {{- end }}

@@ -18,10 +18,11 @@ from app.entities import mappers
 
 from .base_service import BaseService
 
-_I_SRC_UID_KEY: Final = "interlink/source.uid"
-_I_SRC_POD_UID_KEY: Final = "interlink/source.pod_uid"
-_I_SRC_NAME_KEY: Final = "interlink/source.name"
-_I_SRC_NS_KEY: Final = "interlink/source.namespace"
+_I_SRC_UID_KEY: Final = "interlink.io/source.uid"
+_I_SRC_POD_UID_KEY: Final = "interlink.io/source.pod_uid"
+_I_SRC_NAME_KEY: Final = "interlink.io/source.name"
+_I_SRC_NS_KEY: Final = "interlink.io/source.namespace"
+_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"
 _I_COMMON_LABELS: Final = {"interlink": "offloading"}
 
 _MAX_K8S_SEGMENT_NAME: Final = 63
@@ -129,7 +130,7 @@ class KubernetesPluginService(BaseService):
                 assert i_pod_with_volumes.pod.metadata.namespace
                 self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
 
-                # create supported volumes
+                # create pod's volumes
                 for i_volume in i_pod_with_volumes.container:
                     assert i_pod_with_volumes.pod.metadata.uid
                     if i_volume.config_maps:
@@ -211,7 +212,7 @@ class KubernetesPluginService(BaseService):
         self._scope_metadata(metadata, metadata, pod_uid=i_pod.metadata.uid)
 
         pod_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
-        self._scope_volumes_and_config_maps(pod_spec, pod_uid=i_pod.metadata.uid)
+        self._filter_volumes(pod_spec, metadata, pod_uid=i_pod.metadata.uid)
 
         if self._offloading_params["node_selector"]:
             pod_spec.node_selector = self._offloading_params["node_selector"]
@@ -415,6 +416,55 @@ class KubernetesPluginService(BaseService):
 
         return list(container_ports)
 
+    def _filter_volumes(self, pod_spec: k.V1PodSpec, metadata: k.V1ObjectMeta, *, pod_uid: str):
+        """Keep only supported volume types and scope their names"""
+        # region spec.volumes
+        filtered_volumes: list[k.V1Volume] = []
+        for volume in pod_spec.volumes or []:
+            if isinstance(volume, k.V1Volume):
+                if volume.config_map:
+                    assert volume.config_map.name
+                    volume.config_map.name = self._scope_obj(volume.config_map.name, pod_uid=pod_uid)
+                    filtered_volumes.append(volume)
+                if volume.secret:
+                    assert volume.secret.secret_name
+                    volume.secret.secret_name = self._scope_obj(volume.secret.secret_name, pod_uid=pod_uid)
+                    filtered_volumes.append(volume)
+                if volume.empty_dir:
+                    filtered_volumes.append(volume)
+                if volume.persistent_volume_claim and metadata.annotations:
+                    if volume.persistent_volume_claim.claim_name == metadata.annotations.get(_I_REMOTE_PVC):
+                        filtered_volumes.append(volume)
+        pod_spec.volumes = filtered_volumes or None
+        # endregion
+        # region spec.containers[*].volumeMounts
+        for container in pod_spec.containers:
+            filtered_volume_mounts: list[k.V1VolumeMount] = []
+            for vm in container.volume_mounts or []:
+                # if _.find(scoped_volumes, lambda v, _idx, _coll, vm=vm: v.name == vm.name):
+                if next((fv for fv in filtered_volumes if fv.name == vm.name), None):
+                    filtered_volume_mounts.append(vm)
+            container.volume_mounts = filtered_volume_mounts or None
+        # endregion
+        # region spec.containers[*].env[*].value_from, spec.containers[*].env_from
+        for container in pod_spec.containers:
+            for env_var in container.env or []:
+                if value_from := env_var.value_from:
+                    if value_from.config_map_key_ref and value_from.config_map_key_ref.name:
+                        value_from.config_map_key_ref.name = self._scope_obj(
+                            value_from.config_map_key_ref.name, pod_uid=pod_uid
+                        )
+                    if value_from.secret_key_ref and value_from.secret_key_ref.name:
+                        value_from.secret_key_ref.name = self._scope_obj(
+                            value_from.secret_key_ref.name, pod_uid=pod_uid
+                        )
+            for env_from in container.env_from or []:
+                if env_from.config_map_ref and env_from.config_map_ref.name:
+                    env_from.config_map_ref.name = self._scope_obj(env_from.config_map_ref.name, pod_uid=pod_uid)
+                if env_from.secret_ref and env_from.secret_ref.name:
+                    env_from.secret_ref.name = self._scope_obj(env_from.secret_ref.name, pod_uid=pod_uid)
+        # endregion
+
     def _scope_ns(self, name: str) -> str:
         """Scope a K8s namespace name to the configuration option `k8s.offloading_namespace`"""
         return f"{self._offloading_params["namespace"]}-{name}" if self._offloading_params["namespace"] else name
@@ -440,48 +490,3 @@ class KubernetesPluginService(BaseService):
         )
         metadata.namespace = self._scope_ns(source_metadata.namespace)
         metadata.name = self._scope_obj(source_metadata.name, pod_uid=pod_uid)
-
-    def _scope_volumes_and_config_maps(self, pod_spec: k.V1PodSpec, *, pod_uid: str):
-        # region spec.volumes
-        scoped_volumes: list[k.V1Volume] = []
-        for volume in pod_spec.volumes or []:
-            if isinstance(volume, k.V1Volume):
-                if volume.config_map:
-                    assert volume.config_map.name
-                    volume.config_map.name = self._scope_obj(volume.config_map.name, pod_uid=pod_uid)
-                    scoped_volumes.append(volume)
-                if volume.secret:
-                    assert volume.secret.secret_name
-                    volume.secret.secret_name = self._scope_obj(volume.secret.secret_name, pod_uid=pod_uid)
-                    scoped_volumes.append(volume)
-                if volume.empty_dir:
-                    scoped_volumes.append(volume)
-        pod_spec.volumes = scoped_volumes or None
-        # endregion
-        # region spec.containers[*].volumeMounts
-        for container in pod_spec.containers:
-            scoped_volume_mounts: list[k.V1VolumeMount] = []
-            for vm in container.volume_mounts or []:
-                # if _.find(scoped_volumes, lambda v, _idx, _coll, vm=vm: v.name == vm.name):
-                if next((v for v in scoped_volumes if v.name == vm.name), None):
-                    scoped_volume_mounts.append(vm)
-            container.volume_mounts = scoped_volume_mounts or None
-        # endregion
-        # region spec.containers[*].env[*].value_from, spec.containers[*].env_from
-        for container in pod_spec.containers:
-            for env_var in container.env or []:
-                if value_from := env_var.value_from:
-                    if value_from.config_map_key_ref and value_from.config_map_key_ref.name:
-                        value_from.config_map_key_ref.name = self._scope_obj(
-                            value_from.config_map_key_ref.name, pod_uid=pod_uid
-                        )
-                    if value_from.secret_key_ref and value_from.secret_key_ref.name:
-                        value_from.secret_key_ref.name = self._scope_obj(
-                            value_from.secret_key_ref.name, pod_uid=pod_uid
-                        )
-            for env_from in container.env_from or []:
-                if env_from.config_map_ref and env_from.config_map_ref.name:
-                    env_from.config_map_ref.name = self._scope_obj(env_from.config_map_ref.name, pod_uid=pod_uid)
-                if env_from.secret_ref and env_from.secret_ref.name:
-                    env_from.secret_ref.name = self._scope_obj(env_from.secret_ref.name, pod_uid=pod_uid)
-        # endregion

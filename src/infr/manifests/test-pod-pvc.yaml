@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-pvc
+  namespace: default
+  annotations:
+    interlink.io/remote-pvc: my-volume-claim
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-container
+    image: busybox
+    command: ["sh", "-c", "ls -al /data; sleep 60; echo 'Done!'; exit 0"]
+    resources:
+      limits:
+        memory: "32Mi"
+        cpu: "10m"
+    volumeMounts:
+      - mountPath: "/data"
+        name: my-volume
+  volumes:
+  - name: my-volume
+    persistentVolumeClaim:
+      claimName: my-volume-claim
+  nodeSelector:
+    type: virtual-kubelet
+  tolerations:
+  - key: "virtual-node.interlink/no-schedule"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+---
+# The PVC must exist in the remote cluster, in the namespace where the pod will be offloaded.
+# However, the PVC must exist in the local cluster as well, othwerwise Kubernetes won't schedule the pod
+# reporting: "0/4 nodes are available: persistentvolumeclaim "my-volume-claim" not found."
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-volume-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

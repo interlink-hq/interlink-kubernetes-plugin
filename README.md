@@ -79,7 +79,7 @@ in a running Kubernetes cluster.
 
 The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices).
 
-When offloading an HTTP Microservice, you must explicitly declare at least a TCP port in container's POD definition,
+When offloading an HTTP Microservice, you must explicitly declare the TCP ports in container's POD definition,
 see e.g., [test-microservice](src/infr/manifests/test-microservice.yaml):
 
 ```yaml
@@ -98,7 +98,7 @@ spec:
 
 then the plugin will setup a TCP Tunnel to forward traffic from the *local* cluster to the *remote* cluster.
 
-I.e., the plugin leverages Helm charts at [tcp-tunnel](src/infr/charts/tcp-tunnel) to install a TCP Tunnel
+I.e., the plugin leverages Helm charts (see [tcp-tunnel](src/infr/charts/tcp-tunnel)) to install a TCP Tunnel
 for secure connections between a pair of Gateway and Bastion hosts:
 
 ![Microservice Offloading](docs/assets/diagram-tunnel.png)

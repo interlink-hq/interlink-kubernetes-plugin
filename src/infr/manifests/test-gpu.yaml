@@ -7,7 +7,7 @@ spec:
   containers:
   - name: test-container
     image: nvidia/cuda:12.3.1-base-ubuntu22.04
-    command: ["sh", "-c", "nvidia-smi; sleep 5; exit 0"]
+    command: ["sh", "-c", "nvidia-smi; sleep 5; echo 'Done!'; exit 0"]
     resources:
       limits:
         nvidia.com/gpu: 1

@@ -508,7 +508,7 @@ dev = ["black (==23.3.0)", "build (==0.10.0)", "check-manifest (==0.49)", "click
 
 [[package]]
 name = "interlink"
-version = "0.3.2rc1"
+version = "0.3.8"
 description = "InterLink Plugin SDK"
 optional = false
 python-versions = ">=3.11"
@@ -525,8 +525,8 @@ dev = ["autopep8 (>=2.3.1,<2.4.0)", "black (>=24.8.0,<24.9.0)", "flake8 (>=7.1.1
 [package.source]
 type = "git"
 url = "https://baltig.infn.it/mgattari/interlink-plugin-sdk"
-reference = "0.3.5"
-resolved_reference = "ed9ac9ff9600a3b6473d19df9ac1e3edb15fd66b"
+reference = "0.3.7"
+resolved_reference = "24ca4b100e5c6fc67bf944488a27fcbd7edaf282"
 
 [[package]]
 name = "ipromise"
@@ -1471,4 +1471,4 @@ test = ["websockets"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "82eca822406858fac144104e07677e920645a9bfa650bfe1505e0b2f3f7cb875"
+content-hash = "b75720a29e348f05f13c703d0b79ecc30473f7c77242d6f12d9929b3f6d61514"

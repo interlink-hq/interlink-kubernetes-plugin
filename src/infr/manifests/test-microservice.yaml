@@ -24,8 +24,6 @@ metadata:
 spec:
   containers:
   - name: test-container
-    # curl "${KUBERNETES_MASTER_NODE_IP}:30181/params?query=test" | jq .request
-    # wget -O- ${KUBERNETES_MASTER_NODE_IP}:30181/params?query=test
     image: ealen/echo-server
     command: ["node", "webserver"]
     resources:
@@ -76,15 +74,18 @@ spec:
     value: "true"
     effect: "NoSchedule"
 ---
+# Open a NodePort on the local cluster to access the tunnel, then use the following command to test the tunnel:
+# curl "${K8S_MASTER_NODE_IP}:30181/params?query=test" | jq .request
+# wget -O- ${K8S_MASTER_NODE_IP}:30181/params?query=test
 apiVersion: v1
 kind: Service
 metadata:
-  name: gateway-test-microservice-tunnel-nodeport
+  name: gateway-test-microservice-tunnel
   namespace: tcp-tunnel
 spec:
   type: NodePort
   selector:
-    interlink/role: gateway
+    interlink.io/role: gateway
   ports:
   - port: 8181
     targetPort: 8181

@@ -30,9 +30,9 @@ spec:
     value: "true"
     effect: "NoSchedule"
 ---
-# The PVC must exist in the remote cluster, in the namespace where the pod will be offloaded.
+# The PVC must exist in the remote cluster in the namespace where the pod will be offloaded.
 # However, the PVC must exist in the local cluster as well, othwerwise Kubernetes won't schedule the pod
-# reporting: "0/4 nodes are available: persistentvolumeclaim "my-volume-claim" not found."
+# reporting: "0/n nodes are available: persistentvolumeclaim "my-volume-claim" not found."
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:

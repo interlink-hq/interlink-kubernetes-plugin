@@ -16,8 +16,7 @@ def serialize_k_model_to_dict(api_client: KApiClient, model: Any) -> dict:
 
 def deserialize_dict_to_k_model(api_client: KApiClient, data: dict, k_ref_type: type[T]) -> T:
     """Converts a dict or list to a Kubernetes model.
-    Expects property names in camelCase, they will be converted to snake_case.
-    """
+    Expects property names in camelCase, they will be converted to snake_case."""
     # Notice that the protected function provided by ApiClient creates Kubernetes
     # objects recursively, while the following won't work for nested properties:
     # pod = V1Pod(**dict_to_snake(data))

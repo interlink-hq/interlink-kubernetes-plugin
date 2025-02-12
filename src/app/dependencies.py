@@ -108,7 +108,7 @@ class InjectorModule(Module):
                 config_dict=kubeconfig_dict, client_configuration=kube_configuration.client_configuration
             )
 
-        return CoreV1Api()
+        return CoreV1Api()  # Kubernetes Core Client to manage core resources (e.g., pods, services, namespaces)
 
     @singleton
     @provider

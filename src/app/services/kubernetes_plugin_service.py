@@ -33,16 +33,16 @@ _INSTALL_WITH_PYHELM_CLIENT: Final = False
 
 class KubernetesPluginService(BaseService):
 
-    _k_api: CoreV1Api
-    _k_api_client: ApiClient
+    _k_core_client: CoreV1Api  # Kubernetes Core Client to manage core resources
+    _k_api_client: ApiClient  # Just needed to (de)serialize dict to K8s model
     _h_client: HelmClient
     _offloading_params: dict[str, Any]
 
     @inject
-    def __init__(self, config: Config, logger: Logger, k_api: k.CoreV1Api, h_client: HelmClient):
+    def __init__(self, config: Config, logger: Logger, k_core_client: k.CoreV1Api, h_client: HelmClient):
         super().__init__(config, logger)
-        self._k_api = k_api
-        self._k_api_client = k_api.api_client  # type: ignore
+        self._k_core_client = k_core_client
+        self._k_api_client = k_core_client.api_client  # type: ignore
         self._h_client = h_client
 
         self._offloading_params = {
@@ -61,7 +61,7 @@ class KubernetesPluginService(BaseService):
             try:
                 assert i_pod.metadata.name and i_pod.metadata.namespace and i_pod.metadata.uid
 
-                remote_pod: k.V1Pod = self._k_api.read_namespaced_pod_status(
+                remote_pod: k.V1Pod = self._k_core_client.read_namespaced_pod_status(
                     name=self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid),
                     namespace=self._scope_ns(i_pod.metadata.namespace),
                 )
@@ -103,7 +103,7 @@ class KubernetesPluginService(BaseService):
         '2024-09-20T09:26:33.653884634+02:00 Listening on port 8181.\n
          2024-09-20T09:31:26.751801413+02:00 {"name": "test"}\n
         """
-        logs: str = self._k_api.read_namespaced_pod_log(
+        logs: str = self._k_core_client.read_namespaced_pod_log(
             name=self._scope_obj(i_log_req.pod_name, pod_uid=i_log_req.pod_uid),
             namespace=self._scope_ns(i_log_req.namespace),
             timestamps=i_log_req.opts.timestamps,
@@ -157,7 +157,7 @@ class KubernetesPluginService(BaseService):
         if not rollback:
             self.logger.info("Delete Pod '%s' in '%s'", name, namespace)
         try:
-            self._k_api.delete_namespaced_pod(name=name, namespace=namespace)
+            self._k_core_client.delete_namespaced_pod(name=name, namespace=namespace)
         except k_exceptions.ApiException as api_exception:
             if not rollback:
                 self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
@@ -171,7 +171,7 @@ class KubernetesPluginService(BaseService):
                     if not rollback:
                         self.logger.info("Delete ConfigMap '%s' in '%s'", scoped_name, namespace)
                     try:
-                        self._k_api.delete_namespaced_config_map(scoped_name, namespace)
+                        self._k_core_client.delete_namespaced_config_map(scoped_name, namespace)
                     except k_exceptions.ApiException as api_exception:
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
@@ -180,7 +180,7 @@ class KubernetesPluginService(BaseService):
                     if not rollback:
                         self.logger.info("Delete Secret '%s' in '%s'", scoped_name, namespace)
                     try:
-                        self._k_api.delete_namespaced_secret(scoped_name, namespace)
+                        self._k_core_client.delete_namespaced_secret(scoped_name, namespace)
                     except k_exceptions.ApiException as api_exception:
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
@@ -189,14 +189,14 @@ class KubernetesPluginService(BaseService):
 
     def _create_offloading_namespace(self, name: str):
         scoped_ns = self._scope_ns(name)
-        namespaces: k.V1NamespaceList = self._k_api.list_namespace(
+        namespaces: k.V1NamespaceList = self._k_core_client.list_namespace(
             label_selector=",".join([f"{key}={value}" for key, value in _I_COMMON_LABELS.items()])
         )
         assert isinstance(namespaces.items, list)
         if _.find(namespaces.items, lambda item: item.metadata.name == scoped_ns if item.metadata else False):
             self.logger.info("Namespace '%s' already exists", scoped_ns)
         else:
-            self._k_api.create_namespace(
+            self._k_core_client.create_namespace(
                 k.V1Namespace(
                     api_version="v1",
                     kind="Namespace",
@@ -228,7 +228,7 @@ class KubernetesPluginService(BaseService):
 
         assert metadata.name and metadata.namespace
 
-        remote_pod: k.V1Pod = self._k_api.create_namespaced_pod(namespace=metadata.namespace, body=pod)
+        remote_pod: k.V1Pod = self._k_core_client.create_namespaced_pod(namespace=metadata.namespace, body=pod)
         await self._install_bastion_release(i_pod)
 
         assert i_pod.metadata.uid and remote_pod.metadata and remote_pod.metadata.uid
@@ -288,7 +288,7 @@ class KubernetesPluginService(BaseService):
                 if not rollback:
                     self.logger.info("Delete Headless Service '%s' in '%s'", pod_name, pod_ns)
                 try:
-                    self._k_api.delete_namespaced_service(pod_name, pod_ns)
+                    self._k_core_client.delete_namespaced_service(pod_name, pod_ns)
                 except k_exceptions.ApiException as api_exception:
                     if not rollback:
                         self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
@@ -307,7 +307,7 @@ class KubernetesPluginService(BaseService):
                         ports=[k.V1ServicePort(port=port, target_port=port)],
                     ),
                 )
-                self._k_api.create_namespaced_service(pod_ns, service)
+                self._k_core_client.create_namespaced_service(pod_ns, service)
 
                 bastion_chart_path = self.config.get(Option.TCP_TUNNEL_BASTION_CHART_PATH)
                 bastion_chart = await self._h_client.get_chart(bastion_chart_path)
@@ -370,7 +370,7 @@ class KubernetesPluginService(BaseService):
 
             assert metadata.namespace and metadata.name
 
-            remote_config_map: k.V1ConfigMap = self._k_api.create_namespaced_config_map(
+            remote_config_map: k.V1ConfigMap = self._k_core_client.create_namespaced_config_map(
                 namespace=metadata.namespace, body=config_map
             )
 
@@ -397,7 +397,9 @@ class KubernetesPluginService(BaseService):
 
             assert metadata.namespace and metadata.name
 
-            remote_secret: k.V1Secret = self._k_api.create_namespaced_secret(namespace=metadata.namespace, body=secret)
+            remote_secret: k.V1Secret = self._k_core_client.create_namespaced_secret(
+                namespace=metadata.namespace, body=secret
+            )
 
             self.logger.info("Secret '%s' in '%s' created", metadata.name, metadata.namespace)
             results.append(remote_secret)

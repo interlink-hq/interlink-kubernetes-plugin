@@ -22,7 +22,10 @@ _I_SRC_UID_KEY: Final = "interlink.io/source.uid"
 _I_SRC_POD_UID_KEY: Final = "interlink.io/source.pod_uid"
 _I_SRC_NAME_KEY: Final = "interlink.io/source.name"
 _I_SRC_NS_KEY: Final = "interlink.io/source.namespace"
-_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"
+_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
+_I_REMOTE_PVC_RETENTION_POLICY: Final = (
+    "interlink.io/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
+)
 _I_COMMON_LABELS: Final = {"interlink": "offloading"}
 
 _MAX_K8S_SEGMENT_NAME: Final = 63
@@ -130,15 +133,20 @@ class KubernetesPluginService(BaseService):
                 assert i_pod_with_volumes.pod.metadata.namespace
                 self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
 
-                # create pod's volumes
+                # create POD's volumes
                 for i_volume in i_pod_with_volumes.container:
                     assert i_pod_with_volumes.pod.metadata.uid
                     if i_volume.config_maps:
                         self._create_config_maps(i_volume.config_maps, pod_uid=i_pod_with_volumes.pod.metadata.uid)
                     if i_volume.secrets:
                         self._create_secrets(i_volume.secrets, pod_uid=i_pod_with_volumes.pod.metadata.uid)
-
-                # create pod
+                    if i_volume.persistent_volume_claims:
+                        self._create_pvcs(
+                            i_volume.persistent_volume_claims,
+                            pod_uid=i_pod_with_volumes.pod.metadata.uid,
+                            pod_metadata=i_pod_with_volumes.pod.metadata,
+                        )
+                # create POD
                 results.append(await self._create_pod_and_bastion(i_pod_with_volumes.pod))
             except Exception as exc:
                 self.logger.error("Got an exception while creating Pod (trigger rollback): %s", exc)
@@ -151,13 +159,13 @@ class KubernetesPluginService(BaseService):
         self.logger.info(f"Deleting Pod (rollback={rollback})")
         assert i_pod.metadata.uid and i_pod.metadata.name and i_pod.metadata.namespace
 
-        name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
-        namespace = self._scope_ns(i_pod.metadata.namespace)
+        pod_name = self._scope_obj(i_pod.metadata.name, pod_uid=i_pod.metadata.uid)
+        pod_namespace = self._scope_ns(i_pod.metadata.namespace)
 
         if not rollback:
-            self.logger.info("Delete Pod '%s' in '%s'", name, namespace)
+            self.logger.info("Delete Pod '%s' in '%s'", pod_name, pod_namespace)
         try:
-            self._k_core_client.delete_namespaced_pod(name=name, namespace=namespace)
+            self._k_core_client.delete_namespaced_pod(name=pod_name, namespace=pod_namespace)
         except k_exceptions.ApiException as api_exception:
             if not rollback:
                 self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
@@ -167,23 +175,40 @@ class KubernetesPluginService(BaseService):
         if i_pod.spec and i_pod.spec.volumes:
             for volume in i_pod.spec.volumes:
                 if volume.config_map:
-                    scoped_name = self._scope_obj(volume.config_map.name, pod_uid=i_pod.metadata.uid)
+                    cm_name = self._scope_obj(volume.config_map.name, pod_uid=i_pod.metadata.uid)
                     if not rollback:
-                        self.logger.info("Delete ConfigMap '%s' in '%s'", scoped_name, namespace)
+                        self.logger.info("Delete ConfigMap '%s' in '%s'", cm_name, pod_namespace)
                     try:
-                        self._k_core_client.delete_namespaced_config_map(scoped_name, namespace)
+                        self._k_core_client.delete_namespaced_config_map(cm_name, pod_namespace)
                     except k_exceptions.ApiException as api_exception:
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
                 if volume.secret:
-                    scoped_name = self._scope_obj(volume.secret.secret_name, pod_uid=i_pod.metadata.uid)
+                    secret_name = self._scope_obj(volume.secret.secret_name, pod_uid=i_pod.metadata.uid)
                     if not rollback:
-                        self.logger.info("Delete Secret '%s' in '%s'", scoped_name, namespace)
+                        self.logger.info("Delete Secret '%s' in '%s'", secret_name, pod_namespace)
                     try:
-                        self._k_core_client.delete_namespaced_secret(scoped_name, namespace)
+                        self._k_core_client.delete_namespaced_secret(secret_name, pod_namespace)
                     except k_exceptions.ApiException as api_exception:
                         if not rollback:
                             self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
+                if volume.persistent_volume_claim:
+                    pvc_name = volume.persistent_volume_claim.claim_name  # PVC name is not scoped to POD uid
+                    if remote_pvc := self._find_namespaced_pvc(pvc_name, pod_namespace):
+                        assert remote_pvc.metadata
+                        to_be_deleted = self._check_annotation_value(
+                            remote_pvc.metadata.annotations, _I_REMOTE_PVC_RETENTION_POLICY, "delete"
+                        )
+                        if to_be_deleted:
+                            if not rollback:
+                                self.logger.info("Delete PVC '%s' in '%s'", pvc_name, pod_namespace)
+                            try:
+                                self._k_core_client.delete_namespaced_persistent_volume_claim(pvc_name, pod_namespace)
+                            except k_exceptions.ApiException as api_exception:
+                                if not rollback:
+                                    self.logger.error(
+                                        f"{api_exception.status} {api_exception.reason}: {api_exception.body}"
+                                    )
 
         return f"Pod '{i_pod.metadata.uid}' deleted"
 
@@ -356,25 +381,25 @@ class KubernetesPluginService(BaseService):
         results = []
 
         for i_config_map in i_config_maps:
-            metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_config_map.metadata, k.V1ObjectMeta)
-            self._scope_metadata(metadata, metadata, pod_uid=pod_uid)
+            cm_metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_config_map.metadata, k.V1ObjectMeta)
+            self._scope_metadata(cm_metadata, cm_metadata, pod_uid=pod_uid)
 
             config_map = k.V1ConfigMap(
                 api_version="v1",
                 kind="ConfigMap",
-                metadata=metadata,
+                metadata=cm_metadata,
                 data=i_config_map.data,
                 binary_data=i_config_map.binary_data,
                 immutable=i_config_map.immutable,
             )
 
-            assert metadata.namespace and metadata.name
+            assert cm_metadata.namespace and cm_metadata.name
 
             remote_config_map: k.V1ConfigMap = self._k_core_client.create_namespaced_config_map(
-                namespace=metadata.namespace, body=config_map
+                namespace=cm_metadata.namespace, body=config_map
             )
 
-            self.logger.info("ConfigMap '%s' in '%s' created", metadata.name, metadata.namespace)
+            self.logger.info("ConfigMap '%s' in '%s' created", cm_metadata.name, cm_metadata.namespace)
             results.append(remote_config_map)
         return results
 
@@ -382,28 +407,81 @@ class KubernetesPluginService(BaseService):
         results = []
 
         for i_secret in i_secrets:
-            metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_secret.metadata, k.V1ObjectMeta)
-            self._scope_metadata(metadata, metadata, pod_uid=pod_uid)
+            secret_metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_secret.metadata, k.V1ObjectMeta)
+            self._scope_metadata(secret_metadata, secret_metadata, pod_uid=pod_uid)
 
             secret = k.V1Secret(
                 api_version="v1",
                 kind="Secret",
-                metadata=metadata,
+                metadata=secret_metadata,
                 data=i_secret.data,
                 string_data=i_secret.string_data,
                 immutable=i_secret.immutable,
                 type=i_secret.type,
             )
 
-            assert metadata.namespace and metadata.name
+            assert secret_metadata.namespace and secret_metadata.name
 
             remote_secret: k.V1Secret = self._k_core_client.create_namespaced_secret(
-                namespace=metadata.namespace, body=secret
+                namespace=secret_metadata.namespace, body=secret
             )
 
-            self.logger.info("Secret '%s' in '%s' created", metadata.name, metadata.namespace)
+            self.logger.info("Secret '%s' in '%s' created", secret_metadata.name, secret_metadata.namespace)
             results.append(remote_secret)
         return results
+
+    def _create_pvcs(
+        self, i_pvcs: list[i.PersistentVolumeClaim], *, pod_uid: str, pod_metadata: i.Metadata
+    ) -> list[k.V1PersistentVolumeClaim]:
+        results = []
+
+        for i_pvc in i_pvcs:
+            assert i_pvc.metadata.name
+            if not self._check_annotation_value(pod_metadata.annotations, _I_REMOTE_PVC, i_pvc.metadata.name):
+                continue
+
+            pvc_metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_pvc.metadata, k.V1ObjectMeta)
+            self._scope_metadata(pvc_metadata, pvc_metadata, pod_uid=pod_uid, scope_name_by_pod_uid=False)
+            pvc_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pvc.spec, k.V1PersistentVolumeClaimSpec)
+
+            assert pvc_metadata.name and pvc_metadata.namespace
+
+            if self._find_namespaced_pvc(pvc_metadata.name, pvc_metadata.namespace):
+                self.logger.info(
+                    "PVC '%s' in '%s' already exists, skip creation", pvc_metadata.name, pvc_metadata.namespace
+                )
+                continue
+
+            pvc = k.V1PersistentVolumeClaim(
+                api_version="v1",
+                kind="PersistentVolumeClaim",
+                metadata=pvc_metadata,
+                spec=pvc_spec,
+            )
+
+            remote_pvc: k.V1PersistentVolumeClaim = self._k_core_client.create_namespaced_persistent_volume_claim(
+                namespace=pvc_metadata.namespace, body=pvc
+            )
+
+            self.logger.info("PVC '%s' in '%s' created", pvc_metadata.name, pvc_metadata.namespace)
+            results.append(remote_pvc)
+        return results
+
+    def _find_namespaced_pvc(self, pvc_name: str, pvc_namespace: str) -> k.V1PersistentVolumeClaim | None:
+        """Find a PVC by name and namespace"""
+        remote_pvcs: k.V1PersistentVolumeClaimList = self._k_core_client.list_namespaced_persistent_volume_claim(
+            namespace=pvc_namespace
+        )
+        return _.find(
+            remote_pvcs.items,
+            lambda remote_pvc: (remote_pvc.metadata.name == pvc_name if remote_pvc.metadata else False),
+        )
+
+    def _check_annotation_value(self, annotations: dict[str, str] | None, key: str, value: str) -> bool:
+        if annotations and key in annotations:
+            values = annotations[key].split(",")
+            return value in values
+        return False
 
     def _get_container_ports(self, pod: k.V1Pod | i.PodRequest) -> list[int]:
         assert pod.spec
@@ -434,9 +512,10 @@ class KubernetesPluginService(BaseService):
                     filtered_volumes.append(volume)
                 if volume.empty_dir:
                     filtered_volumes.append(volume)
-                if volume.persistent_volume_claim and metadata.annotations:
-                    if volume.persistent_volume_claim.claim_name == metadata.annotations.get(_I_REMOTE_PVC):
-                        filtered_volumes.append(volume)
+                if volume.persistent_volume_claim and self._check_annotation_value(
+                    metadata.annotations, _I_REMOTE_PVC, volume.persistent_volume_claim.claim_name
+                ):
+                    filtered_volumes.append(volume)
         pod_spec.volumes = filtered_volumes or None
         # endregion
         # region spec.containers[*].volumeMounts
@@ -478,7 +557,15 @@ class KubernetesPluginService(BaseService):
     def _scope_bastion_rel_name(self, port: int, *, pod_uid: str) -> str:
         return f"bastion-{port}-{pod_uid}"[:_MAX_HELM_RELEASE_NAME]
 
-    def _scope_metadata(self, metadata: k.V1ObjectMeta, source_metadata: k.V1ObjectMeta, *, pod_uid: str):
+    def _scope_metadata(
+        self,
+        metadata: k.V1ObjectMeta,
+        source_metadata: k.V1ObjectMeta,
+        *,
+        pod_uid: str,
+        scope_namespace: bool = True,
+        scope_name_by_pod_uid: bool = True,
+    ):
         assert metadata.annotations is not None and metadata.labels is not None
         assert source_metadata.uid and source_metadata.name and source_metadata.namespace
 
@@ -490,5 +577,7 @@ class KubernetesPluginService(BaseService):
                 _I_SRC_NS_KEY: source_metadata.namespace,
             }
         )
-        metadata.namespace = self._scope_ns(source_metadata.namespace)
-        metadata.name = self._scope_obj(source_metadata.name, pod_uid=pod_uid)
+        metadata.namespace = self._scope_ns(source_metadata.namespace) if scope_namespace else source_metadata.namespace
+        metadata.name = (
+            self._scope_obj(source_metadata.name, pod_uid=pod_uid) if scope_name_by_pod_uid else source_metadata.name
+        )

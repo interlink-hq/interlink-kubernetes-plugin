@@ -1,6 +1,7 @@
 {
     "version": "0.2.0",
     "configurations": [
+        // Run FastAPI
         {
             "name": "[interlink-kubernetes-plugin] Run FastAPI",
             "type": "debugpy",
@@ -16,6 +17,28 @@
             "env": {},
             "justMyCode": false,
             "cwd": "${workspaceFolder}/src",
-        }
+        },
+        // Pytest
+        {
+            "name": "[mlaas] Run All Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-x", // stop after 1 failure
+                // "-c=/mk/pytest.ini",
+                "--verbose",
+                "--log-level=INFO",
+                "--log-cli-level=INFO"
+            ],    
+            "cwd": "${workspaceFolder}/test",
+            "env": {
+                // Note: test modules to be resolved via "test.", so don't append: ":${workspaceFolder}/test"
+                "PYTHONPATH": "$PYTHONPATH:${workspaceFolder}/src",
+            },
+            // Note: 'envFile' is redundant as .env file is automatically loaded
+            // "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false
+        },
     ]
 }

@@ -16,7 +16,9 @@ tolerance.
     - [Docker Run](#docker-run)
     - [Local Run](#local-run)
     - [Install via Ansible role](#install-via-ansible-role)
-  - [Microservices Offloading](#microservices-offloading)
+  - [Features](#features)
+    - [POD's Volumes](#pods-volumes)
+    - [Microservices Offloading](#microservices-offloading)
   - [Troubleshooting](#troubleshooting)
     - [401 Unauthorized](#401-unauthorized)
     - [certificate verify failed: unable to get local issuer certificate](#certificate-verify-failed-unable-to-get-local-issuer-certificate)
@@ -75,7 +77,35 @@ See [Ansible Role InterLink > In-cluster](https://baltig.infn.it/infn-cloud/ansi
 to install InterLink components together with the Kubernetes Plugin
 in a running Kubernetes cluster.
 
-## Microservices Offloading
+## Features
+
+### POD's Volumes
+
+The plugins supports the offloading of PODs that reference volumes (via `spec.volumes`)
+and mount them (via `spec.containers[*].volumeMounts`) for the following types:
+
+- configMap
+- secret
+- emptyDir
+- persistenVolumeClaim
+
+In particular, when a POD is offloaded, referenced configMaps and secrets are offloaded as well,
+i.e. they are created in the remote cluster with the same content they have in the local cluster
+(notice that their names keep the original name + POD's uid).
+When the POD is deleted from the local cluster, the referenced configMaps and secrets are deleted
+from the remote cluster as well.
+
+Regarding persistentVolumeClaims, the behaviour is more flexible and can be handled with the following
+annotations:
+
+- `interlink.io/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
+  PVC names to be offloaded;
+- `interlink.io/pvc-retention-policy`: either "delete" or "retain", add this annotation to a remote PVC
+  to either delete or retain it when the POD referencing it will be deleted.
+
+An example manifest is provided here: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
+
+### Microservices Offloading
 
 The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices).
 

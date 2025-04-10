@@ -10,7 +10,7 @@
 		// "--env-file", ".env",
 		"--add-host=host.docker.internal:host-gateway",
 		// Create network with: docker network create devnet
-		// containers will get ip from the network's range, e.g. 172.20.0.0/16
+		// containers will get ip from the network's range, e.g. 172.18.0.0/16
 		"--network", "devnet"
 		// "--network", "minikube"
 	],

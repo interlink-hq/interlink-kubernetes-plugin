@@ -89,21 +89,25 @@ and mount them (via `spec.containers[*].volumeMounts`) for the following types:
 - emptyDir
 - persistenVolumeClaim
 
-In particular, when a POD is offloaded, referenced **configMaps** and **secrets** are offloaded as well,
-i.e. they are created in the remote cluster with the same content they have in the local cluster
+In particular, when a POD is offloaded, the referenced **configMaps** and **secrets** are offloaded
+as well, i.e. they are created in the remote cluster with the same content they have in the local cluster
 (notice that their names keep the original name + POD's uid).
 When the POD is deleted from the local cluster, the referenced **configMaps** and **secrets** are deleted
 from the remote cluster as well.
 
-Regarding **persistentVolumeClaims**, the behaviour is more flexible and can be handled with the following
-annotations:
+Regarding **persistentVolumeClaims**, the behaviour is similar: when the POD is offloaded,
+the remote PVC is created in the remote cluster as well (provided it doesn't exist already).
+Moreover, you can provide the following annotations to tweak the behaviour:
 
-- `interlink/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
+- `interlink.io/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
   PVC names to be offloaded;
-- `interlink/pvc-retention-policy`: either "delete" or "retain", add this annotation to the remote PVC
+- `interlink.io/pvc-retention-policy`: either "delete" or "retain", add this annotation to the PVC
   metadata to either delete or retain it when the POD referencing it will be deleted.
 
 An example manifest is provided here: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
+
+Note: since the POD is submitted to the local cluster, the PVC must exist in the local cluster as well,
+otherwise Kubernetes won't schedule it on the VirtualNode (and the POD won't be offloaded).
 
 ### Microservices Offloading
 

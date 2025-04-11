@@ -18,15 +18,15 @@ from app.entities import mappers
 
 from .base_service import BaseService
 
-_I_SRC_UID_KEY: Final = "interlink/source.uid"
-_I_SRC_POD_UID_KEY: Final = "interlink/source.pod_uid"
-_I_SRC_NAME_KEY: Final = "interlink/source.name"
-_I_SRC_NS_KEY: Final = "interlink/source.namespace"
-_I_REMOTE_PVC: Final = "interlink/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
+_I_SRC_UID_KEY: Final = "interlink.io/source.uid"
+_I_SRC_POD_UID_KEY: Final = "interlink.io/source.pod_uid"
+_I_SRC_NAME_KEY: Final = "interlink.io/source.name"
+_I_SRC_NS_KEY: Final = "interlink.io/source.namespace"
+_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
 _I_REMOTE_PVC_RETENTION_POLICY: Final = (
-    "interlink/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
+    "interlink.io/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
 )
-_I_COMMON_LABELS: Final = {"interlink": "offloading"}
+_I_COMMON_LABELS: Final = {"interlink.io": "offloading"}
 
 _MAX_K8S_SEGMENT_NAME: Final = 63
 _MAX_HELM_RELEASE_NAME: Final = 53

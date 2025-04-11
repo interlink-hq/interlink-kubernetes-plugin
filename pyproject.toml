@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "interlink-kubernetes-plugin"
-version = "1.0.5-rc1"
+version = "1.0.5-rc2"
 description = ""
 authors = ["Mauro Gattari <mauro.gattari@infn.it>"]
 readme = "README.md"

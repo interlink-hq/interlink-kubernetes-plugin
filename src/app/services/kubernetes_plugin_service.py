@@ -18,13 +18,13 @@ from app.entities import mappers
 
 from .base_service import BaseService
 
-_I_SRC_UID_KEY: Final = "interlink.io/source.uid"
-_I_SRC_POD_UID_KEY: Final = "interlink.io/source.pod_uid"
-_I_SRC_NAME_KEY: Final = "interlink.io/source.name"
-_I_SRC_NS_KEY: Final = "interlink.io/source.namespace"
-_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
+_I_SRC_UID_KEY: Final = "interlink/source.uid"
+_I_SRC_POD_UID_KEY: Final = "interlink/source.pod_uid"
+_I_SRC_NAME_KEY: Final = "interlink/source.name"
+_I_SRC_NS_KEY: Final = "interlink/source.namespace"
+_I_REMOTE_PVC: Final = "interlink/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
 _I_REMOTE_PVC_RETENTION_POLICY: Final = (
-    "interlink.io/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
+    "interlink/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
 )
 _I_COMMON_LABELS: Final = {"interlink": "offloading"}
 
@@ -214,9 +214,12 @@ class KubernetesPluginService(BaseService):
 
     def _create_offloading_namespace(self, name: str):
         scoped_ns = self._scope_ns(name)
-        namespaces: k.V1NamespaceList = self._k_core_client.list_namespace(
-            label_selector=",".join([f"{key}={value}" for key, value in _I_COMMON_LABELS.items()])
-        )
+        # Check whether we need to create the offloading namepsace
+        # Notice that we list them all, as the offloading namespace could be a preexisting one.
+        namespaces: k.V1NamespaceList = self._k_core_client.list_namespace()
+        # namespaces: k.V1NamespaceList = self._k_core_client.list_namespace(
+        #     label_selector=",".join([f"{key}={value}" for key, value in _I_COMMON_LABELS.items()])
+        # )
         assert isinstance(namespaces.items, list)
         if _.find(namespaces.items, lambda item: item.metadata.name == scoped_ns if item.metadata else False):
             self.logger.info("Namespace '%s' already exists", scoped_ns)

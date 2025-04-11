@@ -67,11 +67,11 @@ spec:
     secret:
       secretName: test-secret
   nodeSelector:
-    virtual-node.interlink/type: virtual-kubelet
+    type: virtual-kubelet
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"
-    value: "false"
+    value: "true"
     effect: "NoSchedule"
 ---
 # Open a NodePort on the local cluster to access the tunnel, then use the following command to test the tunnel:

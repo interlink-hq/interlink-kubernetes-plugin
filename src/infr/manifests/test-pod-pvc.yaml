@@ -25,11 +25,11 @@ spec:
     persistentVolumeClaim:
       claimName: my-volume-claim
   nodeSelector:
-    virtual-node.interlink/type: virtual-kubelet
+    type: virtual-kubelet
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"
-    value: "false"
+    value: "true"
     effect: "NoSchedule"
 ---
 # TODO The PVC must exist in the local cluster othwerwise Kubernetes won't schedule

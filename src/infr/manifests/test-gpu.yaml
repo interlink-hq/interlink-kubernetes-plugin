@@ -13,10 +13,10 @@ spec:
         nvidia.com/gpu: 1
   restartPolicy: Never
   nodeSelector:
-    virtual-node.interlink/type: virtual-kubelet
+    type: virtual-kubelet
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"
-    value: "false"
+    value: "true"
     effect: "NoSchedule"
 ---

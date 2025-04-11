@@ -81,7 +81,7 @@ in a running Kubernetes cluster.
 
 ### POD's Volumes
 
-The plugins supports the offloading of PODs that reference volumes (via `spec.volumes`)
+The plugin supports the offloading of PODs that reference volumes (via `spec.volumes`)
 and mount them (via `spec.containers[*].volumeMounts`) for the following types:
 
 - configMap
@@ -89,19 +89,19 @@ and mount them (via `spec.containers[*].volumeMounts`) for the following types:
 - emptyDir
 - persistenVolumeClaim
 
-In particular, when a POD is offloaded, referenced configMaps and secrets are offloaded as well,
+In particular, when a POD is offloaded, referenced **configMaps** and **secrets** are offloaded as well,
 i.e. they are created in the remote cluster with the same content they have in the local cluster
 (notice that their names keep the original name + POD's uid).
-When the POD is deleted from the local cluster, the referenced configMaps and secrets are deleted
+When the POD is deleted from the local cluster, the referenced **configMaps** and **secrets** are deleted
 from the remote cluster as well.
 
-Regarding persistentVolumeClaims, the behaviour is more flexible and can be handled with the following
+Regarding **persistentVolumeClaims**, the behaviour is more flexible and can be handled with the following
 annotations:
 
-- `interlink.io/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
+- `interlink/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
   PVC names to be offloaded;
-- `interlink.io/pvc-retention-policy`: either "delete" or "retain", add this annotation to a remote PVC
-  to either delete or retain it when the POD referencing it will be deleted.
+- `interlink/pvc-retention-policy`: either "delete" or "retain", add this annotation to the remote PVC
+  metadata to either delete or retain it when the POD referencing it will be deleted.
 
 An example manifest is provided here: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
 

@@ -22,6 +22,7 @@ tolerance.
   - [Troubleshooting](#troubleshooting)
     - [401 Unauthorized](#401-unauthorized)
     - [certificate verify failed: unable to get local issuer certificate](#certificate-verify-failed-unable-to-get-local-issuer-certificate)
+  - [Credits](#credits)
 
 ## How to Run
 
@@ -224,3 +225,7 @@ You can fix either disabling certificate verification at all:
 or explicitly providing the x509 certificates and client private key:
 
 - k8s.client_configuration={"verify_ssl": true, "ssl_ca_cert": "private/k8s-microk8s/ca.crt", "cert_file": "private/k8s-microk8s/client.crt", "key_file": "private/k8s-microk8s/client.key"}
+
+## Credits
+
+Originally created by Mauro Gattari in 2024.

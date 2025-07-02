@@ -9,11 +9,14 @@ spec:
     image: busybox
     command: ["sh", "-c", "i=0; while true; do echo $i; i=$((i+1)); sleep 3; done"]
     resources:
-      limits:
+      requests:
         memory: "32Mi"
-        cpu: "10m"
+        cpu: "10m"    
+      limits:
+        memory: "48Mi"
+        cpu: "12m"
   nodeSelector:
-    type: virtual-kubelet
+    virtual-node.interlink/type: virtual-kubelet
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"

@@ -41,7 +41,7 @@ COMMON_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 @controller.resource()
 class KubernetesPluginController:
     @controller.route.get(
-        "/status", summary="Get Pods' status", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+        "/status", summary="Get status", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
     )
     async def get_status(
         self,
@@ -50,7 +50,7 @@ class KubernetesPluginController:
     ) -> list[i.PodStatus]:
         return await k_service.get_status(i_pods)
 
-    @controller.route.get("/getLogs", summary="Get Pods' logs", responses=COMMON_ERROR_RESPONSES)
+    @controller.route.get("/getLogs", summary="Get logs", responses=COMMON_ERROR_RESPONSES)
     async def get_logs(
         self,
         i_log_req: i.LogRequest,
@@ -59,16 +59,16 @@ class KubernetesPluginController:
         return PlainTextResponse(await k_service.get_logs(i_log_req))
 
     @controller.route.post(
-        "/create", summary="Create pods", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+        "/create", summary="Create Pod", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
     )
-    async def create_pods(
+    async def create_pod(
         self,
-        i_pods_with_volumes: list[i.Pod],
+        i_pod_with_volumes: i.Pod,
         k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
     ) -> i.CreateStruct:
-        return await k_service.create_pods(i_pods_with_volumes)
+        return await k_service.create_pod(i_pod_with_volumes)
 
-    @controller.route.post("/delete", summary="Delete pod", responses=COMMON_ERROR_RESPONSES)
+    @controller.route.post("/delete", summary="Delete Pod", responses=COMMON_ERROR_RESPONSES)
     async def delete_pod(
         self,
         i_pod: i.PodRequest,

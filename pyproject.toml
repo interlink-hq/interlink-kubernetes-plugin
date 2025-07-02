@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "interlink-kubernetes-plugin"
-version = "1.0.5-rc2"
+version = "1.0.5-rc3"
 description = ""
 authors = ["Mauro Gattari <mauro.gattari@infn.it>"]
 readme = "README.md"
@@ -19,12 +19,12 @@ fastapi-router-controller = "^0.5.0"
 uvicorn = "^0.29.0"
 confluent-kafka = "^2.4.0"
 pymongo = "^4.7.2"
-kubernetes = "^29.0.0"
+kubernetes = "^31.0.0"
 motor = "^3.4.0"
 injector = "^0.21.0"
 mongodb-migrations = "^1.3.1"
 pyhelm3 = "^0.4.0"
-interlink = {git = "https://baltig.infn.it/mgattari/interlink-plugin-sdk", rev = "latest"}
+interlink = {git = "https://github.com/interlink-hq/interlink-plugin-sdk", rev = "sync-openapi-v0.5.0"}
 pyyaml = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -35,7 +35,7 @@ autopep8 = "^2.1.0"
 isort = "^5.13.2"
 pytest = "^8.2.0"
 pytest-mock = "^3.14.0"
-kubernetes-stubs-elephant-fork = "^30.1.0.post1"
+kubernetes-stubs-elephant-fork = "^31.0.0"
 
 [build-system]
 requires = ["poetry-core"]

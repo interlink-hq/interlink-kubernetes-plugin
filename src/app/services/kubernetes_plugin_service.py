@@ -123,37 +123,37 @@ class KubernetesPluginService(BaseService):
 
         return logs
 
-    async def create_pods(self, i_pods_with_volumes: list[i.Pod]) -> i.CreateStruct:
-        self.logger.info("Creating Pods")
-        results: list[i.CreateStruct] = []
+    async def create_pod(self, i_pod_with_volumes: i.Pod) -> i.CreateStruct:
+        self.logger.info("Creating Pod")
 
-        for i_pod_with_volumes in i_pods_with_volumes:
-            try:
-                # create namespace
-                assert i_pod_with_volumes.pod.metadata.namespace
-                self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
+        result: i.CreateStruct
 
-                # create POD's volumes
-                for i_volume in i_pod_with_volumes.container:
-                    assert i_pod_with_volumes.pod.metadata.uid
-                    if i_volume.config_maps:
-                        self._create_config_maps(i_volume.config_maps, pod_uid=i_pod_with_volumes.pod.metadata.uid)
-                    if i_volume.secrets:
-                        self._create_secrets(i_volume.secrets, pod_uid=i_pod_with_volumes.pod.metadata.uid)
-                    if i_volume.persistent_volume_claims:
-                        self._create_pvcs(
-                            i_volume.persistent_volume_claims,
-                            pod_uid=i_pod_with_volumes.pod.metadata.uid,
-                            pod_metadata=i_pod_with_volumes.pod.metadata,
-                        )
-                # create POD
-                results.append(await self._create_pod_and_bastion(i_pod_with_volumes.pod))
-            except Exception as exc:
-                self.logger.error("Got an exception while creating Pod (trigger rollback): %s", exc)
-                await self.delete_pod(i_pod_with_volumes.pod, rollback=True)
-                raise exc
+        try:
+            # create namespace
+            assert i_pod_with_volumes.pod.metadata.namespace
+            self._create_offloading_namespace(i_pod_with_volumes.pod.metadata.namespace)
 
-        return results[0]
+            # create POD's volumes
+            for i_volume in i_pod_with_volumes.container:
+                assert i_pod_with_volumes.pod.metadata.uid
+                if i_volume.config_maps:
+                    self._create_config_maps(i_volume.config_maps, pod_uid=i_pod_with_volumes.pod.metadata.uid)
+                if i_volume.secrets:
+                    self._create_secrets(i_volume.secrets, pod_uid=i_pod_with_volumes.pod.metadata.uid)
+                if i_volume.persistent_volume_claims:
+                    self._create_pvcs(
+                        i_volume.persistent_volume_claims,
+                        pod_uid=i_pod_with_volumes.pod.metadata.uid,
+                        pod_metadata=i_pod_with_volumes.pod.metadata,
+                    )
+            # create POD
+            result = await self._create_pod_and_bastion(i_pod_with_volumes.pod)
+        except Exception as exc:
+            self.logger.error("Got an exception while creating Pod (trigger rollback): %s", exc)
+            await self.delete_pod(i_pod_with_volumes.pod, rollback=True)
+            raise exc
+
+        return result
 
     async def delete_pod(self, i_pod: i.PodRequest, rollback=False) -> str:
         self.logger.info(f"Deleting Pod (rollback={rollback})")

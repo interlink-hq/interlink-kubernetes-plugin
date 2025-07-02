@@ -27,15 +27,18 @@ spec:
     image: ealen/echo-server
     command: ["node", "webserver"]
     resources:
-      limits:
+      requests:
         memory: "32Mi"
-        cpu: "10m"
+        cpu: "10m"    
+      limits:
+        memory: "48Mi"
+        cpu: "12m"
     env:
       - name: PORT
         value: "8181"
       - name: test_data
         value: just a test
-      # Not supported in virtual-kubelet (as of Interlink 0.3.7)
+      # Not supported in virtual-kubelet (as of Interlink 0.5.1)
       # - name: test_cm_key
       #   valueFrom:
       #     configMapKeyRef:
@@ -46,7 +49,7 @@ spec:
       #     secretKeyRef:
       #       name: test-secret
       #       key: test_secret_key
-    # Not supported in virtual-kubelet (as of Interlink 0.3.7)
+    # Not supported in virtual-kubelet (as of Interlink 0.5.1)
     # envFrom:
     #   - configMapRef:
     #       name: test-cm
@@ -67,7 +70,7 @@ spec:
     secret:
       secretName: test-secret
   nodeSelector:
-    type: virtual-kubelet
+    virtual-node.interlink/type: virtual-kubelet
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"

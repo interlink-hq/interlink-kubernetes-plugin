@@ -1,7 +1,7 @@
 # InterLink Kubernetes Plugin
 
-[InterLink](https://intertwin-eu.github.io/interLink/) plugin to extend the capabilities of existing Kubernetes clusters,
-enabling them to offload workloads to another remote cluster.
+[InterLink](https://intertwin-eu.github.io/interLink/) plugin to extend the capabilities of *local* Kubernetes clusters,
+enabling them to offload workloads to other *remote* clusters.
 This is particularly useful for distributing workloads across multiple clusters for better resource utilization and fault
 tolerance.
 
@@ -14,7 +14,7 @@ tolerance.
   - [How to Run](#how-to-run)
     - [Configure](#configure)
     - [Docker Run](#docker-run)
-    - [Local Run](#local-run)
+    - [Development](#development)
     - [Install via Ansible role](#install-via-ansible-role)
   - [Features](#features)
     - [POD's Volumes](#pods-volumes)
@@ -31,7 +31,7 @@ tolerance.
 File [config.sample.ini](src/private/config.sample.ini) defines plugin's configuration,
 rename file to *config.ini* and provide missing values, in particular:
 
-- k8s.kubeconfig_path: path to the Kubeconfig YAML file to access the *remote* cluster, defaults to `private/k8s/kubeconfig.yaml`;
+- k8s.kubeconfig_path: path to the Kubeconfig YAML file to access the *remote* cluster, defaults to `./private/k8s/kubeconfig.yaml`;
 - k8s.kubeconfig: alternatively, provide Kubeconfig inline in json format;
 - k8s.client_configuration: options to set to the underlying python Kubernetes client
   [configuration object](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/configuration.py);
@@ -50,14 +50,15 @@ See [Troubleshooting](#troubleshooting) below for common errors.
 
 ### Docker Run
 
-Assuming *config.ini* file is located at path `./private/config.ini` together with additional configuration files
-(e.g. `private/k8s/kubeconfig.yaml`), you can launch the plugin with:
+Docker images are currently hosted at [hub.docker.com/r/mginfn/interlink-kubernetes-plugin](https://hub.docker.com/r/mginfn/interlink-kubernetes-plugin).
+Assuming your *config.ini* file is located at path `./private/config.ini` together with additional configuration files
+(e.g. `./private/k8s/kubeconfig.yaml`), you can launch the plugin with:
 
 ```sh
 docker run --rm -v ./private:/interlink-kubernetes-plugin/private -p 30400:4000 docker.io/mginfn/interlink-kubernetes-plugin:latest uvicorn main:app --host=0.0.0.0 --port=4000 --log-level=debug
 ```
 
-### Local Run
+### Development
 
 Clone repository, then install plugin's dependencies:
 
@@ -97,18 +98,21 @@ When the POD is deleted from the local cluster, the referenced **configMaps** an
 from the remote cluster as well.
 
 Regarding **persistentVolumeClaims**, the behaviour is similar: when the POD is offloaded,
-the remote PVC is created in the remote cluster as well (provided it doesn't exist already).
-Moreover, you can provide the following annotations to tweak the behaviour:
+the referenced PVC will be offloaded as whell, i.e. the PVC will be created in the remote cluster
+(except if it doesn't exist already).
+Provide the following annotations to control the behaviour:
 
 - `interlink.io/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
-  PVC names to be offloaded;
+  PVC names that will be offloaded;
 - `interlink.io/pvc-retention-policy`: either "delete" or "retain", add this annotation to the PVC
   metadata to either delete or retain it when the POD referencing it will be deleted.
 
 An example manifest is provided here: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
-
-Note: since the POD is submitted to the local cluster, the PVC must exist in the local cluster as well,
+Notice that since the POD is submitted to the local cluster, the PVC must exist in the local cluster as well,
 otherwise Kubernetes won't schedule it on the VirtualNode (and the POD won't be offloaded).
+
+Note: current PVC support is experimental and it's not yet supported by InterLink API Server,
+see issue [Add support for POD's PersistentVolumeClaims](https://github.com/interlink-hq/interLink/issues/396).
 
 ### Microservices Offloading
 
@@ -170,7 +174,7 @@ clusters:
     server: https://example.com:6443
 ```
 
-finally, you can disable certificate verification (but you will find "InsecureRequestWarning" in plugin's logs):
+finally, you can disable certificate verification (but you will get "InsecureRequestWarning" in plugin's logs):
 
 ```yaml
 clusters:

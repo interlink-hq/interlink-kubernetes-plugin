@@ -4,7 +4,7 @@ metadata:
   name: test-pod-pvc
   namespace: default
   annotations:
-    # This annotation is used to indicate that the PVC must exist on the remote cluster
+    # This annotation is used to indicate that the PVC will be created in the remote cluster
     # in the namespace where the pod will be offloaded.
     interlink.io/remote-pvc: my-volume-claim
 spec:
@@ -35,16 +35,16 @@ spec:
     value: "true"
     effect: "NoSchedule"
 ---
-# TODO The PVC must exist in the local cluster othwerwise Kubernetes won't schedule
-# TODO the pod on the virtual node, reporting:
-# TODO "0/n nodes are available: persistentvolumeclaim "my-volume-claim" not found."
+# Note: The PVC must exist in the local cluster othwerwise Kubernetes won't schedule
+# the pod on the virtual node, reporting:
+# "0/n nodes are available: persistentvolumeclaim "my-volume-claim" not found."
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: my-volume-claim
   namespace: default
   annotations:
-    # This annotation is used to indicate that the PVC should be deleted from the remote cluster
+    # This annotation is used to indicate that the PVC will be deleted from the remote cluster
     # when the pod is deleted.
     interlink.io/pvc-retention-policy: delete
 spec:

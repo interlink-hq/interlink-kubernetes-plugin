@@ -32,6 +32,7 @@ class Option(Enum):
     K8S_CLIENT_CONFIGURATION = ("k8s", "client_configuration")
 
     OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
+    OFFLOADING_NAMESPACE_PREFIX_EXCLUSIONS = ("offloading", "namespace_prefix_exclusions")
     OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
     OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
 

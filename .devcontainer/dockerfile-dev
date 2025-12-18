@@ -1,4 +1,4 @@
-FROM python:3.12.3
+FROM python:3.12.12
 
 # Arguments for the build
 # ARG EXAMPLE_ARG=4.0.0
@@ -13,30 +13,43 @@ SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
 
 # Dev packages
 RUN apt -y update && \
-    apt -y install git wget nano less apt-transport-https
+    apt -y install git wget nano less apt-transport-https iproute2
 RUN apt -y install bat && \
     mkdir -p ~/.local/bin && ln -s /usr/bin/batcat ~/.local/bin/bat
-RUN apt -y install zsh && \
-    git clone https://github.com/jotyGill/ezsh ezsh && \
-    cd ezsh && ./install.sh -c && \
-    sed -i 's/# zsh-autosuggestions/zsh-autosuggestions/g' /root/.config/ezsh/ezshrc.zsh && \
-    sed -i 's/# git/git/g' /root/.config/ezsh/ezshrc.zsh
+
+# Install Zsh and OMZ
+RUN apt -y install zsh
+# Install OMZ (file-based install avoids Docker shell quirks)
+RUN wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh && \
+    sh install.sh --unattended && \
+    rm install.sh
+# Override ZSH_CUSTOM since the OMZ installer writes ~/.zshrc
+ENV ZSH_CUSTOM=/root/.oh-my-zsh/custom
+# Install plugins
+RUN git clone https://github.com/zsh-users/zsh-autosuggestions.git $ZSH_CUSTOM/plugins/zsh-autosuggestions && \
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git $ZSH_CUSTOM/plugins/zsh-syntax-highlighting && \
+    git clone https://github.com/zdharma-continuum/fast-syntax-highlighting.git $ZSH_CUSTOM/plugins/fast-syntax-highlighting && \
+    git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git $ZSH_CUSTOM/plugins/zsh-autocomplete
+# Enable plugins in .zshrc
+RUN sed -i 's/^plugins=(git)/plugins=(git kubectl helm zsh-autosuggestions zsh-syntax-highlighting fast-syntax-highlighting zsh-autocomplete)/' /root/.zshrc
+
+# kubectl is required by extension "ms-kubernetes-tools.vscode-kubernetes-tools"
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # App packages
-RUN curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | tee /usr/share/keyrings/helm.gpg > /dev/null && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
-    apt update && \
-    apt install helm
+RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 && \
+    chmod 700 get_helm.sh && \
+    ./get_helm.sh
 
 # Upgrade pip
 RUN python -m pip install --upgrade pip
 
-# Install python requirements
+# Install App python requirements
+# poetry export --with dev --without-hashes -f requirements.txt -o ./src/infr/containers/dev/requirements.txt
 COPY src/infr/containers/${ENVIRONMENT}/requirements.txt /tmp/pip-tmp/
 RUN pip --disable-pip-version-check --no-cache-dir install -r /tmp/pip-tmp/requirements.txt \
     && rm -rf /tmp/pip-tmp
 
 # Install other dependencies (not managed by poetry)
-RUN pip install kubernetes-stubs-elephant-fork==29.0.0
+# RUN pip install kubernetes-stubs-elephant-fork==29.0.0

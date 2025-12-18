@@ -24,7 +24,7 @@ metadata:
 spec:
   containers:
   - name: test-container
-    image: ealen/echo-server
+    image: ealen/echo-server:latest
     command: ["node", "webserver"]
     resources:
       requests:

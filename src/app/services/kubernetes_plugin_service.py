@@ -49,7 +49,8 @@ class KubernetesPluginService(BaseService):
         self._h_client = h_client
 
         self._offloading_params = {
-            "namespace": config.get(Option.OFFLOADING_NAMESPACE_PREFIX, ""),
+            "namespace_prefix": config.get(Option.OFFLOADING_NAMESPACE_PREFIX, ""),
+            "namespace_prefix_exclusions": json.loads(config.get(Option.OFFLOADING_NAMESPACE_PREFIX_EXCLUSIONS, "[]")),
             "node_selector": None,
             "node_tolerations": None,
         }
@@ -550,8 +551,14 @@ class KubernetesPluginService(BaseService):
         # endregion
 
     def _scope_ns(self, name: str) -> str:
-        """Scope a K8s namespace name to the configuration option `k8s.offloading_namespace`"""
-        return f"{self._offloading_params["namespace"]}-{name}" if self._offloading_params["namespace"] else name
+        """Scope a K8s namespace name to the configuration option `offloading.namespace_prefix`,
+        provided it is not in the exclusion list"""
+        return (
+            f"{self._offloading_params["namespace_prefix"]}-{name}"
+            if self._offloading_params["namespace_prefix"]
+            and name not in self._offloading_params["namespace_prefix_exclusions"]
+            else name
+        )
 
     def _scope_obj(self, name: str, *, pod_uid: str) -> str:
         """Scope a K8s object name to the related Pod's uid"""

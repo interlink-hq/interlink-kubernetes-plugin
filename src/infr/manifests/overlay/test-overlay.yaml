@@ -1,0 +1,30 @@
+# https://github.com/interlink-hq/interlink-slurm-plugin/blob/main/pkg/slurm/prepare.go#L1067
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-overlay
+  namespace: mlaas
+  # labels:
+  #   sidecar.istio.io/inject: "false"
+  # annotations:
+  #   interlink.eu/disable-offload-init-containers: "istio-validation,istio-proxy"
+spec:
+  containers:
+  - name: test-container
+    image: docker://busybox:stable
+    command: ["sh", "-c", "i=0; while true; do echo $i; i=$((i+1)); sleep 3; done"]
+    resources:
+      requests:
+        memory: "2G"
+        cpu: "1"
+      limits:
+        memory: "2G"
+        cpu: "1"
+  nodeSelector:
+    kubernetes.io/hostname: hpcbubble-pd-virtual-node-wg
+  tolerations:
+    - key: virtual-node.interlink/no-schedule
+      operator: Exists
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists

@@ -15,11 +15,11 @@ spec:
       limits:
         memory: "48Mi"
         cpu: "12m"
-  # nodeSelector:
-  #   virtual-node.interlink/type: virtual-kubelet
-  # tolerations:
-  # - key: "virtual-node.interlink/no-schedule"
-  #   operator: "Equal"
-  #   value: "true"
-  #   effect: "NoSchedule"
+  nodeSelector:
+    virtual-node.interlink/type: virtual-kubelet
+  tolerations:
+  - key: "virtual-node.interlink/no-schedule"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
 ---

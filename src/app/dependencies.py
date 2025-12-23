@@ -11,13 +11,14 @@ from typing import Any
 from injector import Injector, Module, provider, singleton
 from kubernetes import client as k
 from kubernetes.client.api import CoreV1Api
+from kubernetes.client.configuration import Configuration as KClientConfiguration
 from kubernetes.config import kube_config as k_config
 from pyhelm3 import Client as HelmClient
 from yaml import Dumper, dump
 
 from app.common.config import Config, Option
 from app.common.logger_manager import LoggerManager
-from app.entities.kube_configuration import KubeConfiguration
+from app.entities.kubernetes_plugin_configuration import KubernetesPluginConfiguration
 from app.services.kubernetes_plugin_service import KubernetesPluginService
 
 
@@ -27,8 +28,8 @@ class InjectorModule(Module):
 
     Note: bindings provide instances when invoking `Injector.get(MyClass)`.
     Bindings are required to provide instances within a given scope (e.g. singleton).
-    If no binding is defined for `MyClass` then a fresh new instance is created (resolving constructor
-    injected dependencies) and returned.
+    If no binding is defined for `MyClass` then a fresh new instance is created
+    (resolving constructor injected dependencies) and returned.
 
     See https://github.com/python-injector/injector/blob/master/docs/terminology.rst.
     """
@@ -43,9 +44,9 @@ class InjectorModule(Module):
 
     @singleton
     @provider
-    def provide_kube_configuration(self, config: Config) -> KubeConfiguration:
+    def provide_kubernetes_plugin_configuration(self, config: Config) -> KubernetesPluginConfiguration:
         kubeconfig_path = pathlib.Path(config.get(Option.K8S_KUBECONFIG_PATH, "private/k8s/kubeconfig.yaml"))
-        kube_configuration = KubeConfiguration(kubeconfig_path=str(kubeconfig_path))
+        kubernetes_plugin_configuration = KubernetesPluginConfiguration(kubeconfig_path=str(kubeconfig_path))
 
         if not kubeconfig_path.exists():
             if not config.get(Option.K8S_KUBECONFIG):
@@ -60,15 +61,17 @@ class InjectorModule(Module):
 
         if config.get(Option.K8S_CLIENT_CONFIGURATION):
             config_data: dict[str, Any] = json.loads(config.get(Option.K8S_CLIENT_CONFIGURATION))
-            kube_configuration.client_configuration = k.Configuration()  # type: ignore
+            kubernetes_plugin_configuration.client_configuration = KClientConfiguration()
             for key, value in config_data.items():
-                setattr(kube_configuration.client_configuration, key, value)
+                setattr(kubernetes_plugin_configuration.client_configuration, key, value)
 
-        return kube_configuration
+        return kubernetes_plugin_configuration
 
     @singleton
     @provider
-    def provide_kubernetes_core_api(self, config: Config, kube_configuration: KubeConfiguration) -> k.CoreV1Api:
+    def provide_kubernetes_core_api(
+        self, config: Config, kubernetes_plugin_configuration: KubernetesPluginConfiguration
+    ) -> k.CoreV1Api:
 
         # In Kubernetes, mutual TLS (mTLS) is used to secure communication between various components:
         # - Client-Server Communication: when a client (e.g., kubectl, kubelet) tries to communicate with the server
@@ -96,24 +99,24 @@ class InjectorModule(Module):
         # configuration.cert_file = "private/k8s/client.crt"
         # configuration.key_file = "private/k8s/client.key"
 
-        kubeconfig_path = kube_configuration.kubeconfig_path
+        kubeconfig_path = kubernetes_plugin_configuration.kubeconfig_path
 
         if kubeconfig_path:
             k_config.load_kube_config(
-                config_file=kubeconfig_path, client_configuration=kube_configuration.client_configuration
+                config_file=kubeconfig_path, client_configuration=kubernetes_plugin_configuration.client_configuration
             )
         else:
             kubeconfig_dict: dict[str, Any] = json.loads(config.get(Option.K8S_KUBECONFIG))
             k_config.load_kube_config_from_dict(
-                config_dict=kubeconfig_dict, client_configuration=kube_configuration.client_configuration
+                config_dict=kubeconfig_dict, client_configuration=kubernetes_plugin_configuration.client_configuration
             )
 
-        return CoreV1Api()  # Kubernetes Core Client to manage core resources (e.g., pods, services, namespaces)
+        return CoreV1Api()  # Kubernetes Core client to manage core resources (e.g., pods, services, namespaces)
 
     @singleton
     @provider
-    def provide_helm_client(self, kube_configuration: KubeConfiguration) -> HelmClient:
-        return HelmClient(kubeconfig=pathlib.Path(kube_configuration.kubeconfig_path))
+    def provide_helm_client(self, kubernetes_plugin_configuration: KubernetesPluginConfiguration) -> HelmClient:
+        return HelmClient(kubeconfig=pathlib.Path(kubernetes_plugin_configuration.kubeconfig_path))
 
     @singleton
     @provider

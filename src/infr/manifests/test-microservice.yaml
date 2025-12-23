@@ -1,3 +1,12 @@
+# Deploy a test microservice that uses ConfigMap and Secret and is accessible via a NodePort service.
+# The microservice is an echo server that responds with the request parameters.
+#
+# To test the microservice from outside the cluster:
+# $ curl "http://${K8S_MASTER_NODE_IP}:30181/params?query=test" | jq .request
+# $ wget -O- "http://${K8S_MASTER_NODE_IP}:30181/params?query=test"
+# or locally within the cluster:
+# $ curl "http://test-microservice.default.svc.cluster.local:8181/params?query=test"
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,6 +30,10 @@ kind: Pod
 metadata:
   name: test-microservice
   namespace: default
+  labels:
+    microservice: echo-server
+  # annotations:
+  #   interlink.eu/disable-offload-init-containers: "istio-validation,istio-proxy"
 spec:
   containers:
   - name: test-container
@@ -53,9 +66,10 @@ spec:
     # envFrom:
     #   - configMapRef:
     #       name: test-cm
-    ports:
-      - containerPort: 8181
-        protocol: TCP
+    # Not supported in virtual-kubelet (as of Interlink 0.6.0)
+    # ports:
+    #   - containerPort: 8181
+    #     protocol: TCP
     volumeMounts:
     - name: test-cm-volume
       mountPath: /etc/config/cm.json
@@ -77,20 +91,32 @@ spec:
     value: "true"
     effect: "NoSchedule"
 ---
-# Open a NodePort on the local cluster to access the tunnel, then use the following command to test the tunnel:
-# curl "${K8S_MASTER_NODE_IP}:30181/params?query=test" | jq .request
-# wget -O- ${K8S_MASTER_NODE_IP}:30181/params?query=test
 apiVersion: v1
 kind: Service
 metadata:
-  name: gateway-test-microservice-tunnel
-  namespace: tcp-tunnel
+  name: test-microservice
+  namespace: default
 spec:
   type: NodePort
   selector:
-    interlink.io/role: gateway
+    microservice: echo-server
   ports:
   - port: 8181
     targetPort: 8181
     nodePort: 30181
+---
+# If using TCP Tunnel, access the microservice via the Gateway host.
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: gateway-test-microservice-tunnel
+#   namespace: tcp-tunnel
+# spec:
+#   type: NodePort
+#   selector:
+#     interlink.io/role: gateway
+#   ports:
+#   - port: 8181
+#     targetPort: 8181
+#     nodePort: 30181
 ---

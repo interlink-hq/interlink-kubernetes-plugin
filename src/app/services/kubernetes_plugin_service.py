@@ -1,3 +1,4 @@
+import base64
 import json
 import subprocess
 from logging import Logger
@@ -22,10 +23,9 @@ _I_SRC_UID_KEY: Final = "interlink.io/source.uid"
 _I_SRC_POD_UID_KEY: Final = "interlink.io/source.pod_uid"
 _I_SRC_NAME_KEY: Final = "interlink.io/source.name"
 _I_SRC_NS_KEY: Final = "interlink.io/source.namespace"
-_I_REMOTE_PVC: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names (POD metadata.annotations)
-_I_REMOTE_PVC_RETENTION_POLICY: Final = (
-    "interlink.io/pvc-retention-policy"  # "delete" or "retain" (PVC metadata.annotations)
-)
+_I_RMT_PVC_KEY: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names
+_I_RMT_PVC_RETENTION_POLICY_KEY: Final = "interlink.io/pvc-retention-policy"  # "delete" or "retain"
+_I_PRE_EXEC_KEY: Final = "slurm-job.vk.io/pre-exec"
 _I_COMMON_LABELS: Final = {"interlink.io": "offloading"}
 
 _MAX_K8S_SEGMENT_NAME: Final = 63
@@ -36,7 +36,7 @@ _INSTALL_WITH_PYHELM_CLIENT: Final = False
 
 class KubernetesPluginService(BaseService):
 
-    _k_core_client: CoreV1Api  # Kubernetes Core Client to manage core resources
+    _k_core_client: CoreV1Api  # Kubernetes Core client to manage core resources (e.g., pods, services, namespaces)
     _k_api_client: ApiClient  # Just needed to (de)serialize dict to K8s model
     _h_client: HelmClient
     _offloading_params: dict[str, Any]
@@ -148,7 +148,7 @@ class KubernetesPluginService(BaseService):
                         pod_metadata=i_pod_with_volumes.pod.metadata,
                     )
             # create POD
-            result = await self._create_pod_and_bastion(i_pod_with_volumes.pod)
+            result = await self._create_pod(i_pod_with_volumes.pod)
         except Exception as exc:
             self.logger.error("Got an exception while creating Pod (trigger rollback): %s", exc)
             await self.delete_pod(i_pod_with_volumes.pod, rollback=True)
@@ -171,7 +171,8 @@ class KubernetesPluginService(BaseService):
             if not rollback:
                 self.logger.error(f"{api_exception.status} {api_exception.reason}: {api_exception.body}")
 
-        await self._install_bastion_release(i_pod, uninstall=True, rollback=rollback)
+        if self.config.get(Option.TCP_TUNNEL_ENABLED):
+            await self._install_bastion_release(i_pod, uninstall=True, rollback=rollback)
 
         if i_pod.spec and i_pod.spec.volumes:
             for volume in i_pod.spec.volumes:
@@ -198,7 +199,7 @@ class KubernetesPluginService(BaseService):
                     if remote_pvc := self._find_namespaced_pvc(pvc_name, pod_namespace):
                         assert remote_pvc.metadata
                         to_be_deleted = self._check_annotation_value(
-                            remote_pvc.metadata.annotations, _I_REMOTE_PVC_RETENTION_POLICY, "delete"
+                            remote_pvc.metadata.annotations, _I_RMT_PVC_RETENTION_POLICY_KEY, "delete"
                         )
                         if to_be_deleted:
                             if not rollback:
@@ -234,19 +235,23 @@ class KubernetesPluginService(BaseService):
             )
             self.logger.info("Namespace '%s' created", scoped_ns)
 
-    async def _create_pod_and_bastion(self, i_pod: i.PodRequest) -> i.CreateStruct:
+    async def _create_pod(self, i_pod: i.PodRequest) -> i.CreateStruct:
         assert i_pod.metadata.uid
 
-        metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.metadata, k.V1ObjectMeta)
+        metadata: k.V1ObjectMeta = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.metadata, k.V1ObjectMeta)
         self._scope_metadata(metadata, metadata, pod_uid=i_pod.metadata.uid)
 
-        pod_spec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
+        pod_spec: k.V1PodSpec = mappers.map_i_model_to_k_model(self._k_api_client, i_pod.spec, k.V1PodSpec)
         self._filter_volumes(pod_spec, metadata, pod_uid=i_pod.metadata.uid)
 
         if self._offloading_params["node_selector"]:
             pod_spec.node_selector = self._offloading_params["node_selector"]
         if self._offloading_params["node_tolerations"]:
             pod_spec.tolerations = [k.V1Toleration(**t) for t in self._offloading_params["node_tolerations"]]
+
+        if metadata.annotations and _I_PRE_EXEC_KEY in metadata.annotations:
+            pre_exec_cmd = metadata.annotations[_I_PRE_EXEC_KEY]
+            self._add_pre_exec_init_container(pod_spec, metadata, pre_exec_cmd)
 
         pod = k.V1Pod(
             api_version="v1",
@@ -255,13 +260,13 @@ class KubernetesPluginService(BaseService):
             spec=pod_spec,
         )
 
-        assert metadata.name and metadata.namespace
+        if self.config.get(Option.TCP_TUNNEL_ENABLED):
+            await self._install_bastion_release(i_pod)
 
+        assert metadata.name and metadata.namespace
         remote_pod: k.V1Pod = self._k_core_client.create_namespaced_pod(namespace=metadata.namespace, body=pod)
-        await self._install_bastion_release(i_pod)
 
         assert i_pod.metadata.uid and remote_pod.metadata and remote_pod.metadata.uid
-
         create_result = i.CreateStruct(pod_uid=i_pod.metadata.uid, pod_jid=remote_pod.metadata.uid)
         self.logger.info(
             "Pod '%s' in '%s' created, with result: %s",
@@ -381,6 +386,139 @@ class KubernetesPluginService(BaseService):
                     self.logger.debug(result.stdout)
             # endregion / install
 
+    def _add_pre_exec_init_container(self, pod_spec: k.V1PodSpec, metadata: k.V1ObjectMeta, pre_exec_cmd: str) -> None:
+        """
+        Add an init container to extract and create mesh.sh from heredoc in pre-exec annotation.
+
+        If pre_exec_cmd contains a heredoc pattern for mesh.sh, this function:
+        1. Extracts the heredoc content
+        2. Creates an init container that writes mesh.sh to a shared emptyDir volume and executes it
+        3. Adds the shared volume to the pod spec
+
+        See reference code at:
+        https://github.com/interlink-hq/interlink-slurm-plugin/blob/main/pkg/slurm/prepare.go#L1067.
+        """
+        heredoc_marker: Final = "EOFMESH"
+        heredoc_start_pattern: Final = f"cat <<'{heredoc_marker}' > $TMPDIR/mesh.sh"
+
+        if heredoc_start_pattern not in pre_exec_cmd:
+            self.logger.debug("No mesh.sh heredoc pattern found in pre-exec annotation")
+            return
+
+        mesh_script = self._extract_heredoc(pre_exec_cmd, heredoc_marker)
+        if not mesh_script:
+            self.logger.warning("Failed to extract mesh.sh heredoc content")
+            return
+
+        # region Base64 encode the script content to avoid escaping issues
+        encoded_script = base64.b64encode(mesh_script.encode()).decode()
+        if not metadata.annotations:
+            metadata.annotations = {}
+        metadata.annotations[_I_PRE_EXEC_KEY + "-base64"] = encoded_script
+
+        # region Add to pod spec the emptyDir volume
+        script_volume_name: Final = "interlink-scripts"
+        script_mount_path: Final = "/tmp/interlink"
+
+        if not pod_spec.volumes:
+            pod_spec.volumes = []
+
+        pod_spec.volumes.append(k.V1Volume(name=script_volume_name, empty_dir=k.V1EmptyDirVolumeSource()))
+        # endregion / Add to pod spec the emptyDir volume
+
+        # region Add to pod spec the init container to write and execute mesh.sh
+        init_container = k.V1Container(
+            name="mesh-setup",
+            image="alpine:latest",
+            restart_policy="Always",
+            command=["/bin/sh", "-c"],
+            args=[
+                f"""
+                apk add --no-cache curl bash procps gcompat libc6-compat iproute2 util-linux shadow && \
+                echo '{encoded_script}' | base64 -d > {script_mount_path}/mesh.sh && \
+                sed -i 's/fg 1/fg %1/g' {script_mount_path}/mesh.sh && \
+                sed -i 's|unshare \\$UNSHARE_FLAGS --net --mount \\$TMPDIR/slirp.sh|\\$TMPDIR/slirp.sh|g' \\
+                    {script_mount_path}/mesh.sh && \
+                chmod 0755 {script_mount_path}/mesh.sh && \
+                cat > {script_mount_path}/job-fake.sh <<'EOFWRAPPER'
+#!/bin/bash
+# Application wrapper that runs inside mesh network namespace
+echo "INFO: Running application inside mesh network"
+echo "INFO: Network interfaces:"
+ip addr show || true
+echo "INFO: Routes:"
+ip route show || true
+echo "INFO: Testing connectivity..."
+ping -c 2 10.7.0.1 || echo "Warning: Cannot reach WireGuard endpoint"
+echo "INFO: Mesh network is ready, keeping namespace alive..."
+# Keep the container running to maintain the mesh network
+sleep infinity
+EOFWRAPPER
+                chmod 0755 {script_mount_path}/job-fake.sh && \
+                export SLURM_JOB_ID=1 && \
+                export SLURM_PROCID=0 && \
+                export SLURM_TMPDIR=/tmp && \
+                export TMPDIR=/tmp && \
+                echo "INFO: Executing mesh.sh with job-fake.sh as argument..." && \
+                bash {script_mount_path}/mesh.sh {script_mount_path}/job-fake.sh
+                """
+            ],
+            volume_mounts=[k.V1VolumeMount(name=script_volume_name, mount_path=script_mount_path)],
+            security_context=k.V1SecurityContext(
+                privileged=True, capabilities=k.V1Capabilities(add=["SYS_ADMIN", "NET_ADMIN", "SYS_CHROOT"])
+            ),
+        )
+
+        if not pod_spec.init_containers:
+            pod_spec.init_containers = []
+        pod_spec.init_containers.append(init_container)
+        # endregion / Add to pod spec the init container to write and execute mesh.sh
+
+    def _extract_heredoc(self, text: str, marker: str) -> str:
+        """Extract heredoc content between markers."""
+        start_pattern = f"<<'{marker}'"
+        end_pattern = f"\n{marker}"
+
+        start_idx = text.find(start_pattern)
+        if start_idx == -1:
+            return ""
+
+        # Find the end of the line containing the start pattern
+        content_start = text.find("\n", start_idx)
+        if content_start == -1:
+            return ""
+        content_start += 1  # Move past the newline
+
+        # Find the end marker
+        end_idx = text.find(end_pattern, content_start)
+        if end_idx == -1:
+            return ""
+
+        return text[content_start:end_idx]
+
+    def _remove_heredoc(self, text: str, marker: str) -> str:
+        """Remove heredoc section from text."""
+        start_pattern = f"cat <<'{marker}'"
+        end_pattern = f"\n{marker}"
+
+        start_idx = text.find(start_pattern)
+        if start_idx == -1:
+            return text
+
+        # Find the end marker (including the newline after it)
+        end_idx = text.find(end_pattern, start_idx)
+        if end_idx == -1:
+            return text
+
+        # Move past the end marker and its newline
+        end_idx = text.find("\n", end_idx + len(end_pattern))
+        if end_idx == -1:
+            # If no newline after marker, remove to end
+            return text[:start_idx].rstrip()
+
+        # Remove the heredoc section
+        return text[:start_idx] + text[end_idx + 1 :]
+
     def _create_config_maps(self, i_config_maps: list[i.ConfigMap], *, pod_uid: str) -> list[k.V1ConfigMap]:
         results = []
 
@@ -441,7 +579,7 @@ class KubernetesPluginService(BaseService):
 
         for i_pvc in i_pvcs:
             assert i_pvc.metadata.name
-            if not self._check_annotation_value(pod_metadata.annotations, _I_REMOTE_PVC, i_pvc.metadata.name):
+            if not self._check_annotation_value(pod_metadata.annotations, _I_RMT_PVC_KEY, i_pvc.metadata.name):
                 continue
 
             pvc_metadata = mappers.map_i_model_to_k_model(self._k_api_client, i_pvc.metadata, k.V1ObjectMeta)
@@ -517,7 +655,7 @@ class KubernetesPluginService(BaseService):
                 if volume.empty_dir:
                     filtered_volumes.append(volume)
                 if volume.persistent_volume_claim and self._check_annotation_value(
-                    metadata.annotations, _I_REMOTE_PVC, volume.persistent_volume_claim.claim_name
+                    metadata.annotations, _I_RMT_PVC_KEY, volume.persistent_volume_claim.claim_name
                 ):
                     filtered_volumes.append(volume)
         pod_spec.volumes = filtered_volumes or None

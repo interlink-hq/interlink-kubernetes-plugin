@@ -17,6 +17,7 @@ tolerance.
     - [Development](#development)
     - [Install via Ansible role](#install-via-ansible-role)
   - [Features](#features)
+    - [Interling Mesh Networking](#interling-mesh-networking)
     - [POD's Volumes](#pods-volumes)
     - [Microservices Offloading](#microservices-offloading)
   - [Troubleshooting](#troubleshooting)
@@ -32,21 +33,16 @@ File [config.sample.ini](src/private/config.sample.ini) defines plugin's configu
 rename file to *config.ini* and provide missing values, in particular:
 
 - k8s.kubeconfig_path: path to the Kubeconfig YAML file to access the *remote* cluster, defaults to `./private/k8s/kubeconfig.yaml`;
+  see the [Troubleshooting](#troubleshooting) section below for common errors;
 - k8s.kubeconfig: alternatively, provide Kubeconfig inline in json format;
 - k8s.client_configuration: options to set to the underlying python Kubernetes client
   [configuration object](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/configuration.py);
-- offloading.namespace_prefix: remote cluster namespace prefix where resources are offloaded, defaults to `offloading`;
-- offloading.node_selector: remote workloads node selector, if you want to offload resources to selected nodes;
-- offloading.node_tolerations: remote workloads node tolerations, if you want to offload resources to tainted nodes.
-
-The following properties are required for the offloading of HTTP Microservices
-(see [tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md)):
-
-- tcp_tunnel.gateway_host: IP of the Gateway host where the Reverse SSH Tunnel will be created;
-- tcp_tunnel.gateway_port: port to reach the Gateway's SSH daemon;
-- tcp_tunnel.gateway_ssh_private_key: the SSH private key
-
-See [Troubleshooting](#troubleshooting) below for common errors.
+- offloading.namespace_prefix: remote cluster namespace prefix where resources are offloaded, defaults to `offloading`:
+  e.g., if a POD in namespace `dev` is offloaded, it will be created in remote namespace `offloading-dev`;
+- offloading.node_selector: remote workloads node selector, if you want to offload resources to selected nodes of the
+  remote cluster;
+- offloading.node_tolerations: remote workloads node tolerations, if you want to offload resources to tainted nodes of the
+  remote cluster;
 
 ### Docker Run
 
@@ -80,6 +76,14 @@ to install InterLink components together with the Kubernetes Plugin
 in a running Kubernetes cluster.
 
 ## Features
+
+### Interling Mesh Networking
+
+The plugin supports the [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/12-mesh-network-configuration.mdx)
+feature to enable PODs running on the **remote** cluster to seamlessly communicate with services and pods
+in the **local** Kubernetes cluster.
+
+Details will be provided soon.
 
 ### POD's Volumes
 
@@ -116,7 +120,16 @@ see issue [Add support for POD's PersistentVolumeClaims](https://github.com/inte
 
 ### Microservices Offloading
 
-The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices).
+**This feature is deprecated in favour of the [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/12-mesh-network-configuration.mdx) feature.**
+
+The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices),
+see [tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md) for more details.
+
+To enable this feature, you must set the following properties in *config.ini* file:
+
+- tcp_tunnel.gateway_host: IP of the Gateway host where the Reverse SSH Tunnel will be created;
+- tcp_tunnel.gateway_port: port to reach the Gateway's SSH daemon;
+- tcp_tunnel.gateway_ssh_private_key: the SSH private key
 
 When offloading an HTTP Microservice, you must explicitly declare the TCP ports in container's POD definition,
 see e.g., [test-microservice](src/infr/manifests/test-microservice.yaml):
@@ -159,7 +172,7 @@ The `cluster` section must include the URL of the Kubernetes API Server and the 
 clusters:
 - cluster:
     certificate-authority-data: <base64-encoded-CA-certificate>
-    server: https://example.com:6443
+    server: https://api-kubernetes.example.com
   name: my-cluster
 ```
 
@@ -171,7 +184,7 @@ clusters:
 - name: cluster-name
   cluster:
     certificate-authority: /path/to/ca.crt
-    server: https://example.com:6443
+    server: https://api-kubernetes.example.com
 ```
 
 finally, you can disable certificate verification (but you will get "InsecureRequestWarning" in plugin's logs):
@@ -180,7 +193,7 @@ finally, you can disable certificate verification (but you will get "InsecureReq
 clusters:
 - cluster:
     insecure-skip-tls-verify: true
-    server: https://example.com:6443
+    server: https://api-kubernetes.example.com
   name: my-cluster
 ```
 

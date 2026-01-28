@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 import subprocess
 from logging import Logger
 from typing import Any, Final
@@ -710,10 +711,10 @@ EOFWRAPPER
 
     def _scope_obj_name(self, name: str, *, pod_uid: str) -> str:
         """Scope a K8s object name to the related Pod's uid"""
-        return f"{name}-{pod_uid}"[:_MAX_K8S_SEGMENT_NAME] if pod_uid else name
+        return self._ensure_subdomain_compliance(f"{name}-{pod_uid}"[:_MAX_K8S_SEGMENT_NAME] if pod_uid else name)
 
     def _scope_bastion_rel_name(self, port: int, *, pod_uid: str) -> str:
-        return f"bastion-{port}-{pod_uid}"[:_MAX_HELM_RELEASE_NAME]
+        return self._ensure_subdomain_compliance(f"bastion-{port}-{pod_uid}"[:_MAX_HELM_RELEASE_NAME])
 
     def _scope_metadata(
         self,
@@ -743,3 +744,16 @@ EOFWRAPPER
             if scope_name_by_pod_uid
             else source_metadata.name
         )
+
+    def _ensure_subdomain_compliance(self, name: str) -> str:
+        """A lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.',
+        and must start and end with an alphanumeric character.
+        See https://kubernetes.io/docs/concepts/overview/working-with-objects/names/"""
+        # Lowercase
+        name = name.lower()
+        # Replace invalid characters with '-'
+        name = re.sub(r"[^a-z0-9-\.]", "-", name)
+        # Ensure starts and ends with alphanumeric character
+        name = re.sub(r"^[^a-z0-9]+", "", name)
+        name = re.sub(r"[^a-z0-9]+$", "", name)
+        return name

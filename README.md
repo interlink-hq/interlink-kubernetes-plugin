@@ -1,9 +1,7 @@
 # InterLink Kubernetes Plugin
 
-[InterLink](https://intertwin-eu.github.io/interLink/) plugin to extend the capabilities of *local* Kubernetes clusters,
-enabling them to offload workloads to other *remote* clusters.
-This is particularly useful for distributing workloads across multiple clusters for better resource utilization and fault
-tolerance.
+[InterLink](https://intertwin-eu.github.io/interLink/) plugin to extend the capabilities of *local* Kubernetes
+clusters by offloading workloads to *remote* clusters.
 
 ![InterLink Offloading](docs/assets/diagram-offloading.png)
 
@@ -11,160 +9,165 @@ tolerance.
 
 - [InterLink Kubernetes Plugin](#interlink-kubernetes-plugin)
   - [Index](#index)
+  - [Prerequisites](#prerequisites)
   - [How to Run](#how-to-run)
     - [Configure](#configure)
     - [Docker Run](#docker-run)
-    - [Development](#development)
+    - [Development Run](#development-run)
     - [Install via Ansible role](#install-via-ansible-role)
+  - [API Endpoints](#api-endpoints)
   - [Features](#features)
-    - [Interling Mesh Networking](#interling-mesh-networking)
-    - [POD's Volumes](#pods-volumes)
-    - [Microservices Offloading](#microservices-offloading)
+    - [InterLink Mesh Networking](#interlink-mesh-networking)
+    - [Pod Volumes](#pod-volumes)
+    - [Microservices Offloading (Deprecated)](#microservices-offloading-deprecated)
   - [Troubleshooting](#troubleshooting)
     - [401 Unauthorized](#401-unauthorized)
-    - [certificate verify failed: unable to get local issuer certificate](#certificate-verify-failed-unable-to-get-local-issuer-certificate)
+    - [TLS verify failed](#tls-verify-failed)
   - [Credits](#credits)
+
+## Prerequisites
+
+- Python 3.12 (for local development)
+- Docker (for containerized runtime)
+- Access to a remote Kubernetes cluster (`kubeconfig`)
+- Helm CLI only if using the deprecated TCP tunnel feature
 
 ## How to Run
 
 ### Configure
 
-File [config.sample.ini](src/private/config.sample.ini) defines plugin's configuration,
-rename file to *config.ini* and provide missing values, in particular:
+`src/private/config.sample.ini` defines the plugin configuration.
+Create `config.ini` from it and provide your environment values:
 
-- k8s.kubeconfig_path: path to the Kubeconfig YAML file to access the *remote* cluster, defaults to `./private/k8s/kubeconfig.yaml`;
-  see the [Troubleshooting](#troubleshooting) section below for common errors;
-- k8s.kubeconfig: alternatively, provide Kubeconfig inline in json format;
-- k8s.client_configuration: options to set to the underlying python Kubernetes client
-  [configuration object](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/configuration.py);
-- offloading.namespace_prefix: remote cluster namespace prefix where resources are offloaded, defaults to `offloading`:
-  e.g., if a POD in namespace `dev` is offloaded, it will be created in remote namespace `offloading-dev`;
-- offloading.node_selector: remote workloads node selector, if you want to offload resources to selected nodes of the
-  remote cluster;
-- offloading.node_tolerations: remote workloads node tolerations, if you want to offload resources to tainted nodes of the
-  remote cluster;
+```sh
+cp src/private/config.sample.ini src/private/config.ini
+```
+
+Key properties:
+
+- `k8s.kubeconfig_path`: path to kubeconfig for the *remote* cluster (default: `private/k8s/kubeconfig.yaml`),
+  see the [Troubleshooting](#troubleshooting) section for common errors
+- `k8s.kubeconfig`: optional inline kubeconfig as JSON
+- `k8s.client_configuration`: optional JSON passed to Kubernetes Python client configuration,
+  see [configuration object](https://github.com/kubernetes-client/python/blob/master/kubernetes/client/configuration.py)
+- `offloading.namespace_prefix`: prefix for offloaded namespaces (default: `offloading`)
+- `offloading.namespace_prefix_exclusions`: namespaces excluded from prefixing
+- `offloading.node_selector`: optional selector JSON applied to offloaded pods
+- `offloading.node_tolerations`: optional tolerations JSON applied to offloaded pods
+
+By default, config is read from `src/private/config.ini`. You can override this with `CONFIG_FILE_PATH`.
 
 ### Docker Run
 
-Docker images are currently hosted at [hub.docker.com/r/mginfn/interlink-kubernetes-plugin](https://hub.docker.com/r/mginfn/interlink-kubernetes-plugin).
-Assuming your *config.ini* file is located at path `./private/config.ini` together with additional configuration files
-(e.g. `./private/k8s/kubeconfig.yaml`), you can launch the plugin with:
+Images are currently published at
+[hub.docker.com/r/mginfn/interlink-kubernetes-plugin](https://hub.docker.com/r/mginfn/interlink-kubernetes-plugin).
+
+If your config files are under `./src/private`:
 
 ```sh
-docker run --rm -v ./private:/interlink-kubernetes-plugin/private -p 30400:4000 docker.io/mginfn/interlink-kubernetes-plugin:latest uvicorn main:app --host=0.0.0.0 --port=4000 --log-level=debug
+docker run --rm \
+  -v ./src/private:/interlink-kubernetes-plugin/private \
+  -p 30400:4000 \
+  docker.io/mginfn/interlink-kubernetes-plugin:latest \
+  uvicorn main:app --host=0.0.0.0 --port=4000 --log-level=debug
 ```
 
-### Development
+### Development Run
 
-Clone repository, then install plugin's dependencies:
+Install dependencies:
 
 ```sh
 pip install -r src/infr/containers/dev/requirements.txt
 ```
 
-Create *config.ini* file as described above, then launch plugin as follows:
+Start the API server:
 
 ```sh
 cd src
-python -m uvicorn main:app --host=0.0.0.0 --port=30400
+python -m uvicorn main:app --host=0.0.0.0 --port=30400 --log-level=debug
 ```
 
 ### Install via Ansible role
 
 See [Ansible Role InterLink > In-cluster](https://baltig.infn.it/infn-cloud/ansible-role-interlink#in-cluster)
-to install InterLink components together with the Kubernetes Plugin
-in a running Kubernetes cluster.
+to install InterLink components together with this Kubernetes Plugin in a running cluster.
+
+## API Endpoints
+
+The v1 controller exposes:
+
+- `GET /status`
+- `GET /getLogs`
+- `POST /create`
+- `POST /delete`
+
+Interactive docs are available at `/docs` (configurable via `app.api_docs_path`).
 
 ## Features
 
-### Interling Mesh Networking
+### InterLink Mesh Networking
 
-The plugin supports the [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/12-mesh-network-configuration.mdx)
-feature to enable PODs running on the **remote** cluster to seamlessly communicate with services and pods
-in the **local** Kubernetes cluster.
+The plugin supports
+[Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/13-mesh-network-configuration.mdx)
+to allow pods running on the **remote** cluster to communicate with services and pods in the **local** cluster.
 
-Details will be provided soon.
+### Pod Volumes
 
-### POD's Volumes
+Note: this feature is experimental and may be subject to breaking changes.
 
-The plugin supports the offloading of PODs that reference volumes (via `spec.volumes`)
-and mount them (via `spec.containers[*].volumeMounts`) for the following types:
+The plugin supports offloading pods that reference `spec.volumes` and mount them with
+`spec.containers[*].volumeMounts` for:
 
-- configMap
-- secret
-- emptyDir
-- persistenVolumeClaim
+- `configMap`
+- `secret`
+- `emptyDir`
+- `persistentVolumeClaim`
 
-In particular, when a POD is offloaded, the referenced **configMaps** and **secrets** are offloaded
-as well, i.e. they are created in the remote cluster with the same content they have in the local cluster
-(notice that their names keep the original name + POD's uid).
-When the POD is deleted from the local cluster, the referenced **configMaps** and **secrets** are deleted
-from the remote cluster as well.
+Behavior summary:
 
-Regarding **persistentVolumeClaims**, the behaviour is similar: when the POD is offloaded,
-the referenced PVC will be offloaded as whell, i.e. the PVC will be created in the remote cluster
-(except if it doesn't exist already).
-Provide the following annotations to control the behaviour:
+- referenced `ConfigMap` and `Secret` objects are offloaded and scoped to the pod UID
+  (i.e., their names are suffixed with POD's uid)
+- when the offloaded pod is deleted, scoped `ConfigMap` and `Secret` objects are deleted as well
+- PVC offloading is enabled per pod using metadata annotation `interlink.io/remote-pvc`
+  (comma-separated list of PVC names that will be offloaded)
+- PVC cleanup policy is controlled by PVC annotation `interlink.io/pvc-retention-policy` (`delete` or `retain`)
 
-- `interlink.io/remote-pvc`: add this annotation to POD metadata to provide a comma-separated list of
-  PVC names that will be offloaded;
-- `interlink.io/pvc-retention-policy`: either "delete" or "retain", add this annotation to the PVC
-  metadata to either delete or retain it when the POD referencing it will be deleted.
+See example manifest: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
 
-An example manifest is provided here: [test-pod-pvc.yaml](src/infr/manifests/test-pod-pvc.yaml).
-Notice that since the POD is submitted to the local cluster, the PVC must exist in the local cluster as well,
-otherwise Kubernetes won't schedule it on the VirtualNode (and the POD won't be offloaded).
+Notes:
 
-Note: current PVC support is experimental and it's not yet supported by InterLink API Server,
-see issue [Add support for POD's PersistentVolumeClaims](https://github.com/interlink-hq/interLink/issues/396).
+- that since the POD is submitted to the local cluster, the PVC must exist in the local cluster as well,
+  otherwise Kubernetes won't schedule it on the VirtualNode (and the POD won't be offloaded)
+  current PVC support is experimental and not yet supported by InterLink API Server.
+See [interlink-hq/interLink#396](https://github.com/interlink-hq/interLink/issues/396).
 
-### Microservices Offloading
+### Microservices Offloading (Deprecated)
 
-**This feature is deprecated in favour of the [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/12-mesh-network-configuration.mdx) feature.**
+Note: this feature is deprecated and may be removed in future releases. It is recommended to use
+InterLink Mesh Networking instead.
 
-The plugin supports the offloading of PODs that expose HTTP endpoints (i.e., HTTP Microservices),
-see [tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md) for more details.
+The plugin supports offloading HTTP microservices through TCP tunnel Helm charts:
+[src/infr/charts/tcp-tunnel/README.md](src/infr/charts/tcp-tunnel/README.md).
 
-To enable this feature, you must set the following properties in *config.ini* file:
+To enable this feature, configure in `config.ini`:
 
-- tcp_tunnel.gateway_host: IP of the Gateway host where the Reverse SSH Tunnel will be created;
-- tcp_tunnel.gateway_port: port to reach the Gateway's SSH daemon;
-- tcp_tunnel.gateway_ssh_private_key: the SSH private key
+- `tcp_tunnel.gateway_host`: gateway host IP/DNS
+- `tcp_tunnel.gateway_port`: gateway SSH port
+- `tcp_tunnel.gateway_ssh_private_key`: SSH private key
 
-When offloading an HTTP Microservice, you must explicitly declare the TCP ports in container's POD definition,
-see e.g., [test-microservice](src/infr/manifests/test-microservice.yaml):
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  ...
-spec:
-  containers:
-  - name: test-container
-    ...
-    ports:
-      - containerPort: 8181
-        protocol: TCP
-```
-
-then the plugin will setup a TCP Tunnel to forward traffic from the *local* cluster to the *remote* cluster.
-
-I.e., the plugin leverages Helm charts (see [tcp-tunnel](src/infr/charts/tcp-tunnel)) to install a TCP Tunnel
-for secure connections between a pair of Gateway and Bastion hosts:
+For offloaded microservices, explicitly declare container TCP ports in pod specs.
+See [test-microservice.yaml](src/infr/manifests/test-microservice.yaml).
 
 ![Microservice Offloading](docs/assets/diagram-tunnel.png)
 
-Notice that the plugin takes care of installing a Bastion host in the *remote* cluster for each offloaded POD,
-while you are in charge of installing a Gateway host (single instance) in the *local* cluster
-and provide to the plugin the *tcp_tunnel* config properties to allow the Bastion host to reach the Gateway host
-to start the tunnel.
+The plugin installs a Bastion release in the *remote* cluster for each offloaded pod.
+You must install and expose one Gateway instance in the *local* cluster.
 
 ## Troubleshooting
 
 ### 401 Unauthorized
 
-If the plugin raises error "401 Unauthorized", check the **remote** cluster Kubeconfig YAML.
+If the plugin raises `401 Unauthorized`, check the **remote** kubeconfig.
 
 The `cluster` section must include the URL of the Kubernetes API Server and the inline base64-encoded CA certificate:
 
@@ -176,8 +179,7 @@ clusters:
   name: my-cluster
 ```
 
-alternatively, you can provide the path to the CA certificate, but you must take care of allowing the plugin
-to read that file (e.g., you need to mount a volume when running the docker image):
+Alternatively, provide a CA certificate path and ensure it is readable by the plugin:
 
 ```yaml
 clusters:
@@ -187,7 +189,7 @@ clusters:
     server: https://api-kubernetes.example.com
 ```
 
-finally, you can disable certificate verification (but you will get "InsecureRequestWarning" in plugin's logs):
+You can disable server certificate verification (but you will get "InsecureRequestWarning" in plugin's logs):
 
 ```yaml
 clusters:
@@ -197,7 +199,7 @@ clusters:
   name: my-cluster
 ```
 
-Regarding the `users` section, you must include the inline base64-encoded client certificate and key:
+In the `users` section, include client certificate/key or token authentication:
 
 ```yaml
 users:
@@ -207,8 +209,7 @@ users:
     client-key-data: <base64-encoded-key>
 ```
 
-alternatively, you can provide the path to the client certificate and key, but you must take care of allowing the plugin
-to read that files:
+Or file paths:
 
 ```yaml
 users:
@@ -218,7 +219,7 @@ users:
     client-key: /path/to/client.key
 ```
 
-finally, token-based authentication is also allowed, e.g.:
+Or token-based authentication:
 
 ```yaml
 users:
@@ -227,22 +228,21 @@ users:
     token: <auth-token>
 ```
 
-### certificate verify failed: unable to get local issuer certificate
+### TLS verify failed
 
-If the plugin raises error
-"certificate verify failed: unable to get local issuer certificate"
-while attempting to access the remote cluster,
-it likely indicates that your Kubernetes cluster is using self-signed x509 certificates.
-Check the client and CA certificates in the Kubeconfig YAML file to confirm.
+If the plugin raises
+`certificate verify failed: unable to get local issuer certificate` while reaching the remote cluster,
+your cluster may use self-signed certificates.
 
-You can fix either disabling certificate verification at all:
+You can disable certificate verification:
 
-- k8s.client_configuration={"verify_ssl": false}
+- `k8s.client_configuration={"verify_ssl": false}`
 
-or explicitly providing the x509 certificates and client private key:
+Or explicitly provide CA/client certificates:
 
-- k8s.client_configuration={"verify_ssl": true, "ssl_ca_cert": "private/k8s-microk8s/ca.crt", "cert_file": "private/k8s-microk8s/client.crt", "key_file": "private/k8s-microk8s/client.key"}
+- `k8s.client_configuration={"verify_ssl": true, "ssl_ca_cert": "private/k8s-microk8s/ca.crt",`
+  `"cert_file": "private/k8s-microk8s/client.crt", "key_file": "private/k8s-microk8s/client.key"}`
 
 ## Credits
 
-Originally created by Mauro Gattari in 2024.
+Originally created by Mauro Gattari @ INFN in 2024.

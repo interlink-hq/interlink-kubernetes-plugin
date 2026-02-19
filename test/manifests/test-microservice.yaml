@@ -1,0 +1,129 @@
+# Deploy a simple microservice (httpbin) that mounts a ConfigMap and a Secret as volumes
+# and expose it via a NodePort service.
+# Test the microservice from outside the cluster:
+# - curl "http://${K8S_MASTER_NODE_IP}:30180/headers" | jq .
+# - wget -O- "http://${K8S_MASTER_NODE_IP}:30180/headers" | jq .
+# or locally within the cluster:
+# - curl -s "http://httpbin.test.svc.cluster.local:8000/headers"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-cm
+  namespace: test
+data:
+  test_cm_key: just a ConfigMap test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+  namespace: test
+type: Opaque
+data:
+  # test_secret_key: just a Secret test
+  test_secret_key: anVzdCBhIFNlY3JldCB0ZXN0
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: httpbin
+  namespace: test
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: test
+  labels:
+    app: httpbin
+    service: httpbin  
+spec:
+  type: NodePort
+  selector:
+    app: httpbin
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8080
+    nodePort: 30180
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin
+  namespace: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpbin
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: httpbin
+        version: v1
+      # annotations:
+      #   interlink.eu/disable-offload-init-containers: "istio-validation,istio-proxy"
+    spec:
+      serviceAccountName: httpbin
+      nodeSelector:
+        virtual-node.interlink/type: virtual-kubelet
+        kubernetes.io/hostname: vnode-interlink-edge-dev
+      tolerations:
+      - key: "virtual-node.interlink/no-schedule"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"      
+      containers:
+      - image: docker.io/mccutchen/go-httpbin:v2.15.0
+        imagePullPolicy: IfNotPresent
+        name: httpbin
+        ports:
+        - name: http
+          containerPort: 8080
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"    
+          limits:
+            memory: "48Mi"
+            cpu: "12m"        
+        env:
+          - name: test_data
+            value: just a test
+          # Not supported by virtual-kubelet (as of Interlink 0.5.1)
+          # - name: test_cm_key
+          #   valueFrom:
+          #     configMapKeyRef:
+          #       name: test-cm
+          #       key: test_cm_key
+          # - name: test_secret_key
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: test-secret
+          #       key: test_secret_key
+        # Not supported by virtual-kubelet (as of Interlink 0.5.1)
+        # envFrom:
+        #   - configMapRef:
+        #       name: test-cm
+        volumeMounts:
+        - name: test-cm-volume
+          mountPath: /etc/config/cm.json
+        - name: test-secret-volume
+          mountPath: /etc/config/secret.json
+          readOnly: true
+      volumes:
+      - name: test-cm-volume
+        configMap:
+          name: test-cm
+      - name: test-secret-volume
+        secret:
+          secretName: test-secret
+---

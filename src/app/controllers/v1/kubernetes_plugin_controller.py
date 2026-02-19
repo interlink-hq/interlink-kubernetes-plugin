@@ -50,8 +50,26 @@ class KubernetesPluginController:
     ) -> list[i.PodStatus]:
         return await k_service.get_status(i_pods)
 
+    @controller.route.post(
+        "/status", summary="Get status (POST compatibility)", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+    )
+    async def post_status(
+        self,
+        i_pods: list[i.PodRequest],
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+    ) -> list[i.PodStatus]:
+        return await k_service.get_status(i_pods)
+
     @controller.route.get("/getLogs", summary="Get logs", responses=COMMON_ERROR_RESPONSES)
     async def get_logs(
+        self,
+        i_log_req: i.LogRequest,
+        k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),
+    ) -> PlainTextResponse:
+        return PlainTextResponse(await k_service.get_logs(i_log_req))
+
+    @controller.route.post("/getLogs", summary="Get logs (POST compatibility)", responses=COMMON_ERROR_RESPONSES)
+    async def post_logs(
         self,
         i_log_req: i.LogRequest,
         k_service: KubernetesPluginService = Depends(get_kubernetes_plugin_service),

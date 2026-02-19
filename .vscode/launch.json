@@ -1,9 +1,37 @@
 {
     "version": "0.2.0",
     "configurations": [
-        // Run FastAPI
+        // Launch configurations
         {
-            "name": "[interlink-kubernetes-plugin] Run FastAPI",
+            "name": "[interlink-kubernetes-plugin] Launch app.server (TCP socket)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.server",
+            "args": [],
+            "env": {
+                "APP_SOCKET_ADDRESS": "http://0.0.0.0",
+                "APP_SOCKET_PORT": "30400",
+                "UVICORN_RELOAD": "true"
+            },
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/src",
+        },
+        {
+            "name": "[interlink-kubernetes-plugin] Launch app.server (Unix socket)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.server",
+            "args": [],
+            "env": {
+                "APP_SOCKET_ADDRESS": "unix:///root/sockets/.plugin.sock",
+                "APP_SOCKET_PORT": "0",
+                "UVICORN_RELOAD": "true"
+            },
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/src",
+        },        
+        {
+            "name": "[interlink-kubernetes-plugin] Launch FastAPI",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
@@ -20,7 +48,7 @@
         },
         // Pytest
         {
-            "name": "[mlaas] Run All Tests",
+            "name": "[interlink-kubernetes-plugin] Run All Tests",
             "type": "debugpy",
             "request": "launch",
             "module": "pytest",

@@ -14,6 +14,10 @@
 		"--network", "devnet"
 		// "--network", "minikube"
 	],
+	"mounts": [
+		// Allow the InterLink API Server to bind the plugin socket via the host's filesystem
+		"source=${localWorkspaceFolder}/.devcontainer/sockets,target=/root/sockets,type=bind"
+	],
 	"remoteEnv": {
 	},
 
@@ -34,7 +38,8 @@
 				"davidanson.vscode-markdownlint",
 				"tim-koehler.helm-intellisense",
 				"vadzimnestsiarenka.helm-template-preview-and-more",
-				"ms-kubernetes-tools.vscode-kubernetes-tools"
+				"ms-kubernetes-tools.vscode-kubernetes-tools",
+				"openai.chatgpt"
 			]
 		}
 	}

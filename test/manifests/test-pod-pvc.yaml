@@ -29,6 +29,7 @@ spec:
       claimName: my-volume-claim
   nodeSelector:
     virtual-node.interlink/type: virtual-kubelet
+    # kubernetes.io/hostname: <name-of-the-virtual-node>
   tolerations:
   - key: "virtual-node.interlink/no-schedule"
     operator: "Equal"

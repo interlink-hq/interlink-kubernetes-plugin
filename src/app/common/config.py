@@ -21,6 +21,8 @@ class Option(Enum):
     APP_VERSION = ("app", "version")
     API_VERSIONS = ("app", "api_versions")
     API_DOCS_PATH = ("app", "api_docs_path")
+    SOCKET_ADDRESS = ("app", "socket_address")
+    SOCKET_PORT = ("app", "socket_port")
 
     LOG_LEVEL = ("log", "level")
     LOG_DIR = ("log", "dir")

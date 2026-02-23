@@ -431,10 +431,13 @@ class KubernetesPluginService(BaseService):
         # endregion / Add to pod spec the emptyDir volume
 
         # region Add to pod spec the init container to write and execute mesh.sh
-        init_container = k.V1Container(
+        setup_container = k.V1Container(
             name="mesh-setup",
             image="alpine:latest",
-            restart_policy="Always",
+            # Set to "always" to enable the init container to run as a sidecar container
+            restart_policy=(
+                "Always" if (self.config.get(Option.MESH_INIT_CONTAINER, "True").lower() == "true") else None
+            ),
             command=["/bin/sh", "-c"],
             args=[
                 f"""
@@ -474,9 +477,12 @@ EOFWRAPPER
             ),
         )
 
-        if not pod_spec.init_containers:
-            pod_spec.init_containers = []
-        pod_spec.init_containers.append(init_container)
+        if self.config.get(Option.MESH_INIT_CONTAINER, "True").lower() == "true":
+            if not pod_spec.init_containers:
+                pod_spec.init_containers = []
+            pod_spec.init_containers.append(setup_container)
+        else:
+            pod_spec.containers.append(setup_container)
         # endregion / Add to pod spec the init container to write and execute mesh.sh
 
     def _extract_heredoc(self, text: str, marker: str) -> str:

@@ -1,10 +1,17 @@
-# Deploy a simple microservice (httpbin) that mounts a ConfigMap and a Secret as volumes
-# and expose it via a NodePort service.
+# Deploy a simple microservice (httpbin) and expose it via a NodePort service.
+# Pod additionally mount a ConfigMap and a Secret as volumes.
+#
 # Test the microservice from outside the cluster:
-# - curl "http://${K8S_MASTER_NODE_IP}:30180/headers" | jq .
-# - wget -O- "http://${K8S_MASTER_NODE_IP}:30180/headers" | jq .
+# - curl "http://${LOAD_BALANCER_IP}:30180/headers" | jq .
+# - wget -O- "http://${LOAD_BALANCER_IP}:30180/headers" | jq .
 # or locally within the cluster:
 # - curl -s "http://httpbin.test.svc.cluster.local:8000/headers"
+#
+# Pod includes an additional ssh-debug container with various debugging tools installed.
+# Connect to the ssh-debug container from outside the cluster:
+# - ssh root@${LOAD_BALANCER_IP} -p 30122
+# or locally within the cluster:
+# - ssh root@httpbin.test.svc.cluster.local -p 2222
 ---
 apiVersion: v1
 kind: Namespace
@@ -18,6 +25,29 @@ metadata:
   namespace: test
 data:
   test_cm_key: just a ConfigMap test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssh-setup-cm
+  namespace: test
+data:
+  setup.sh: |
+    #!/bin/sh
+    set -e
+    
+    # Install SSH server and networking tools.
+    # Include tools for WireGuard testing (e.g. wg, wg-quick, etc.).
+    apk add --no-cache openssh iproute2 iputils bind-tools netcat-openbsd curl wget net-tools tcpdump nano wireguard-tools
+  
+    # Configure SSH
+    ssh-keygen -A
+    echo 'root:debug123' | chpasswd
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    
+    # Start SSH server (runs in foreground to prevent container exit and log to stderr for visibility)
+    /usr/sbin/sshd -D -e
 ---
 apiVersion: v1
 kind: Secret
@@ -52,6 +82,10 @@ spec:
     port: 8000
     targetPort: 8080
     nodePort: 30180
+  - name: ssh-debug
+    port: 2222
+    targetPort: 22
+    nodePort: 30122
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -114,16 +148,42 @@ spec:
         #   - configMapRef:
         #       name: test-cm
         volumeMounts:
-        - name: test-cm-volume
+        - name: cm-volume
           mountPath: /etc/config/cm.json
-        - name: test-secret-volume
+        - name: secret-volume
           mountPath: /etc/config/secret.json
           readOnly: true
+      - image: alpine:3.21
+        imagePullPolicy: IfNotPresent
+        name: ssh-debug
+        command: ["/bin/sh", "/scripts/setup.sh"]
+        ports:
+        - name: ssh
+          containerPort: 22
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+          limits:
+            memory: "128Mi"
+            cpu: "50m"
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN  # ip route/rule manipulation
+              - NET_RAW    # tcpdump / raw sockets
+        volumeMounts:
+        - name: ssh-setup-volume
+          mountPath: /scripts
       volumes:
-      - name: test-cm-volume
+      - name: cm-volume
         configMap:
           name: test-cm
-      - name: test-secret-volume
+      - name: secret-volume
         secret:
           secretName: test-secret
+      - name: ssh-setup-volume
+        configMap:
+          name: ssh-setup-cm
+          defaultMode: 0755
 ---

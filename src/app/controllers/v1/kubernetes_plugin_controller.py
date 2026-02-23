@@ -51,7 +51,10 @@ class KubernetesPluginController:
         return await k_service.get_status(i_pods)
 
     @controller.route.post(
-        "/status", summary="Get status (POST compatibility)", response_model_by_alias=True, responses=COMMON_ERROR_RESPONSES
+        "/status",
+        summary="Get status (POST compatibility)",
+        response_model_by_alias=True,
+        responses=COMMON_ERROR_RESPONSES,
     )
     async def post_status(
         self,

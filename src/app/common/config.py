@@ -39,6 +39,7 @@ class Option(Enum):
     OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
 
     MESH_INIT_CONTAINER = ("mesh", "init_container")
+    MESH_STARTUP_PROBE = ("mesh", "startup_probe")
 
     TCP_TUNNEL_ENABLED = ("tcp_tunnel", "enabled")
     TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")

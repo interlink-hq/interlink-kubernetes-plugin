@@ -198,6 +198,14 @@ The plugin supports
 [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/13-mesh-network-configuration.mdx)
 to allow pods running on the **remote** cluster to communicate with services and pods in the **local** cluster.
 
+Traffic routing is implemented through a mesh-setup sidecar container injected into offloaded pods.
+This container is responsible for:
+
+- configure a WireGuard VPN Client that connects to a WireGuard VPN Server running in the local cluster;
+- configure routing rules to forward traffic destined for local cluster CIDR through the tunnel;
+- encapsulates the VPN tunnel over a websocket connection between the mesh-setup container and a WS Server
+  running in the local cluster, so it can traverse NAT and firewalls without additional configuration.
+
 ### Pod Volumes
 
 Note: this feature is experimental and may be subject to breaking changes.

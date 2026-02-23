@@ -459,6 +459,8 @@ ip route show || true
 echo "INFO: Testing connectivity..."
 ping -c 2 10.7.0.1 || echo "Warning: Cannot reach WireGuard endpoint"
 echo "INFO: Mesh network is ready, keeping namespace alive..."
+# Signal to waiting containers that mesh setup is complete
+touch {script_mount_path}/mesh-ready
 # Keep the container running to maintain the mesh network
 sleep infinity
 EOFWRAPPER
@@ -474,6 +476,16 @@ EOFWRAPPER
             volume_mounts=[k.V1VolumeMount(name=script_volume_name, mount_path=script_mount_path)],
             security_context=k.V1SecurityContext(
                 privileged=True, capabilities=k.V1Capabilities(add=["SYS_ADMIN", "NET_ADMIN", "SYS_CHROOT"])
+            ),
+            # Main containers will not start until this probe passes (sidecar init container behaviour, K8s 1.29+)
+            startup_probe=(
+                k.V1Probe(
+                    _exec=k.V1ExecAction(command=["test", "-f", f"{script_mount_path}/mesh-ready"]),
+                    period_seconds=2,
+                    failure_threshold=60,  # wait up to 120 s for mesh setup to complete
+                )
+                if self.config.get(Option.MESH_STARTUP_PROBE, "True").lower() == "true"
+                else None
             ),
         )
 

@@ -13,10 +13,10 @@
 # or locally within the cluster:
 # - ssh root@httpbin.test.svc.cluster.local -p 2222
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: test
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#   name: test
 ---
 apiVersion: v1
 kind: ConfigMap

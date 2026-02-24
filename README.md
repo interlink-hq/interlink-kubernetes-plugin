@@ -183,8 +183,8 @@ to install InterLink components together with this Kubernetes Plugin in a runnin
 
 The v1 controller exposes:
 
-- `GET /status` (also `POST /status` for compatibility)
-- `GET /getLogs` (also `POST /getLogs` for compatibility)
+- `GET /status`
+- `GET /getLogs`
 - `POST /create`
 - `POST /delete`
 
@@ -194,17 +194,102 @@ Interactive docs are available at `/docs` (configurable via `app.api_docs_path`)
 
 ### InterLink Mesh Networking
 
-The plugin supports
+The Kubernetes plugin supports the
 [Interlink Mesh Networking](https://github.com/interlink-hq/interLink/blob/474-improve-documentation-for-mesh-networking-feature/docs/docs/guides/13-mesh-network-configuration.mdx)
-to allow pods running on the **remote** cluster to communicate with services and pods in the **local** cluster.
+feature that enables offloaded pods running on the **remote** cluster to seamlessly communicate with services and pods
+in the **local** cluster and back.
 
-Traffic routing is implemented through a mesh-setup sidecar container injected into offloaded pods.
-This container is responsible for:
+The plugin implements the mesh networking setup through a `mesh-setup`
+[Sidecar Container](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/)
+that is injected into offloaded pods.
+Accordingly, the InterLink Virtual Kubelet in the **local** cluster must be configured
+to provide a custom mesh setup script:
 
-- configure a WireGuard VPN Client that connects to a WireGuard VPN Server running in the local cluster;
-- configure routing rules to forward traffic destined for local cluster CIDR through the tunnel;
-- encapsulates the VPN tunnel over a websocket connection between the mesh-setup container and a WS Server
-  running in the local cluster, so it can traverse NAT and firewalls without additional configuration.
+```yaml
+virtualNode:
+  network:
+    # Enable full mesh networking
+    fullMesh: true
+    ... other mesh config ...
+    # Mesh script for Kubernetes plugin
+    meshScriptTemplatePath: "/etc/interlink/custom-mesh.sh"
+    meshScriptConfigMapName: "mesh-script-template-k8s"
+```
+
+where the custom script is defined by the following ConfigMap:
+[src/infr/manifests/mesh-script-template-k8s.sh](src/infr/manifests/mesh-script-template-k8s.sh).
+
+The mesh networking setup creates a secure overlay network between the local and remote clusters,
+allowing pods to communicate as if they were in the same cluster.
+Key ideas:
+
+- "pod identity" lives in the local cluster
+- "pod execution" lives in the remote cluster (offloaded pod).
+- a WireGuard-over-WebSocket mesh + local DNAT/MASQUERADE makes it feel seamless.
+
+Architectural diagram:
+
+```txt
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         LOCAL CLUSTER                                       │
+│                                                                                             │
+│   ┌───────────────┐       ┌───────────────┐        ┌───────────────────────────────────┐    │
+│   │    Ingress    │ ----> │    Service    │ -----> │   "Shadow" Pod (appears local)    │    │
+│   └───────────────┘       └───────────────┘        └───────────────────────────────────┘    │
+│                                                          |                                  │
+│                                                          | inbound traffic to pod IP        │
+│                                                          v                                  │
+│        ┌─────────────────────────────────────────────────────────────────────────────┐      │
+│        │                         Shadow Pod: 3 containers                            │      │
+│        │                                                                             │      │
+│        │  (A) wstunnel-server                                                        │      │
+│        │   - listens: ws://0.0.0.0:28080                                             │      │
+│        │   - restrict upgrade path prefix: <secret>                                  │      │
+│        │   - restrict-to: 127.0.0.1:51820                                            │      │
+│        │                                                                             │      │
+│        │  (B) WireGuard server (wg-quick up wg0)                                     │      │
+│        │   - wg0 IP: 10.7.0.1/32                                                     │      │
+│        │   - listens UDP: 51820 (localhost-only enforced by iptables)                │      │
+│        │   - NAT: MASQUERADE for overlay                                             │      │
+│        │                                                                             │      │
+│        │  (C) iptables forwarder (ALL traffic -> remote peer)                        │      │
+│        │   - PREROUTING DNAT: almost all TCP/UDP arriving on main iface              │      │
+│        │       EXCEPT ports (28080, 51820, mesh/health ports...)                     │      │
+│        │       --> 10.7.0.2                                                          │      │
+│        │   - POSTROUTING MASQUERADE: replies come back through shadow pod            │      │
+│        │   - FORWARD ACCEPT: main iface <-> wg0                                      │      │
+│        └─────────────────────────────────────────────────────────────────────────────┘      │
+│                                               |                                             │
+│                                               | DNAT’d traffic routed via wg0               │
+│                                               v                                             │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                |
+                                                | WireGuard tunnel (UDP)
+                                                | carried inside WebSocket (wstunnel)
+                                                v
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         REMOTE CLUSTER                                      │
+│                                                                                             │
+│   ┌───────────────────────────────────────────────────────────────────────────────────┐     │
+│   │             Offloaded Pod (real execution happens here): 2 containers             │     │
+│   │                                                                                   │     │
+│   │  (A) mesh-setup sidecar (runs mesh.sh)                                            │     │
+│   │    wstunnel-client                                                                │     │
+│   │    - local UDP listen: 127.0.0.1:51821                                            │     │
+│   │    - forwards UDP to: 127.0.0.1:51820 (on local cluster shadow pod) via WS        │     │
+│   │    - connects to: ws://<local-ingress-host>:80/<secret-prefix>                    │     │
+│   │    wireguard-go client                                                            │     │
+│   │    - wg IFACE IP: 10.7.0.2/32                                                     │     │
+│   │    - Endpoint: 127.0.0.1:51821                                                    │     │
+│   │    - AllowedIPs include local cluster CIDRs (pods/services)                       │     │
+│   │    - Routes added for those CIDRs via wg IFACE                                    │     │
+│   │                                                                                   │     │
+│   │  (B) Workload container (your app)                                                │     │
+│   │    - receives forwarded traffic as if it were hitting local pod                   │     │
+│   │    - sends responses back through wg tunnel                                       │     │
+│   └───────────────────────────────────────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Pod Volumes
 

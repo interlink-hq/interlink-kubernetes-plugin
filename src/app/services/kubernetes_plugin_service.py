@@ -251,8 +251,8 @@ class KubernetesPluginService(BaseService):
             pod_spec.tolerations = [k.V1Toleration(**t) for t in self._offloading_params["node_tolerations"]]
 
         if metadata.annotations and _I_PRE_EXEC_KEY in metadata.annotations:
-            pre_exec_cmd = metadata.annotations[_I_PRE_EXEC_KEY]
-            self._add_pre_exec_init_container(pod_spec, metadata, pre_exec_cmd)
+            pre_exec = metadata.annotations[_I_PRE_EXEC_KEY]
+            self._add_pre_exec_init_container(pod_spec, metadata, pre_exec)
             # Debug: run pod with privileged containers
             # for container in pod_spec.containers or []:
             #     container.security_context = k.V1SecurityContext(privileged=True)
@@ -390,11 +390,12 @@ class KubernetesPluginService(BaseService):
                     self.logger.debug(result.stdout)
             # endregion / install
 
-    def _add_pre_exec_init_container(self, pod_spec: k.V1PodSpec, metadata: k.V1ObjectMeta, pre_exec_cmd: str) -> None:
+    def _add_pre_exec_init_container(self, pod_spec: k.V1PodSpec, metadata: k.V1ObjectMeta, pre_exec: str) -> None:
         """
-        Add an init container to extract and create mesh.sh from heredoc in pre-exec annotation.
+        Extract mesh.sh from heredoc in pre-exec annotation and add an init container to execute it
+        before the main application containers start.
 
-        If pre_exec_cmd contains a heredoc pattern for mesh.sh, this function:
+        This function:
         1. Extracts the heredoc content
         2. Creates an init container that writes mesh.sh to a shared emptyDir volume and executes it
         3. Adds the shared volume to the pod spec
@@ -402,33 +403,85 @@ class KubernetesPluginService(BaseService):
         See reference code at:
         https://github.com/interlink-hq/interlink-slurm-plugin/blob/main/pkg/slurm/prepare.go#L1067.
         """
+        # region Check for heredoc pattern and extract mesh.sh content
         heredoc_marker: Final = "EOFMESH"
         heredoc_start_pattern: Final = f"cat <<'{heredoc_marker}' > $TMPDIR/mesh.sh"
 
-        if heredoc_start_pattern not in pre_exec_cmd:
+        if heredoc_start_pattern not in pre_exec:
             self.logger.debug("No mesh.sh heredoc pattern found in pre-exec annotation")
             return
 
-        mesh_script = self._extract_heredoc(pre_exec_cmd, heredoc_marker)
+        mesh_script = self._extract_heredoc(pre_exec, heredoc_marker)
+
         if not mesh_script:
             self.logger.warning("Failed to extract mesh.sh heredoc content")
             return
 
-        # region Base64 encode the script content to avoid escaping issues
+        # base64 encode the script content to avoid escaping issues
         encoded_script = base64.b64encode(mesh_script.encode()).decode()
-        if not metadata.annotations:
-            metadata.annotations = {}
-        metadata.annotations[_I_PRE_EXEC_KEY + "-base64"] = encoded_script
+        # endregion / Check for heredoc pattern and extract mesh.sh content
 
-        # region Add to pod spec the emptyDir volume
-        script_volume_name: Final = "interlink-scripts"
-        script_mount_path: Final = "/tmp/interlink"
+        # region Add the emptyDir volume to pod spec
+        scratch_volume: Final = "interlink-scratch"
+        scratch_mount_path: Final = "/tmp/interlink"
 
         if not pod_spec.volumes:
             pod_spec.volumes = []
 
-        pod_spec.volumes.append(k.V1Volume(name=script_volume_name, empty_dir=k.V1EmptyDirVolumeSource()))
+        pod_spec.volumes.append(k.V1Volume(name=scratch_volume, empty_dir=k.V1EmptyDirVolumeSource()))
         # endregion / Add to pod spec the emptyDir volume
+
+        # region Prepare mesh setup script
+        if self.config.get(Option.MESH_SLURM_SETUP_SCRIPT, "False").lower() == "true":
+            script_wrap = f"""
+            # Install dependencies needed for mesh.sh
+            apk add --no-cache curl bash procps gcompat libc6-compat iproute2 util-linux shadow
+            echo '{encoded_script}' | base64 -d > {scratch_mount_path}/mesh.sh
+
+            # Patch mesh.sh to run with a job-fake.sh argument that simulates a Slurm job,
+            # so that we can test it in k8s environment.
+            sed -i 's/fg 1/fg %1/g' {scratch_mount_path}/mesh.sh
+            sed -i 's|unshare \\$UNSHARE_FLAGS --net --mount \\$TMPDIR/slirp.sh|\\$TMPDIR/slirp.sh|g' \\
+                {scratch_mount_path}/mesh.sh
+            sed -i 's|^./slirp4netns|#./slirp4netns|' {scratch_mount_path}/mesh.sh
+            chmod 0755 {scratch_mount_path}/mesh.sh
+
+            cat > {scratch_mount_path}/job-fake.sh <<'EOFWRAPPER'
+            #!/bin/bash
+            # We are done with setup, logs will show connectivity info and then
+            # we just keep the container alive to maintain the mesh network for
+            # the main application containers to use.
+            echo "INFO: Mesh network setup completed"
+            ip addr show || true
+            echo "INFO: Routes:"
+            ip route show || true
+            echo "INFO: WireGuard status:"
+            ./wg show || echo "Warning: wg command failed, cannot show WireGuard status"
+            echo "INFO: Testing connectivity..."
+            ping -c 2 10.7.0.1 || echo "Warning: Cannot reach WireGuard endpoint"
+            echo "INFO: Mesh network is ready, keeping namespace alive..."
+            # Signal to waiting containers that mesh setup is complete
+            touch {scratch_mount_path}/mesh-ready
+            # Keep the container running to maintain the mesh network
+            sleep infinity
+            EOFWRAPPER
+
+            chmod 0755 {scratch_mount_path}/job-fake.sh && \
+            export SLURM_JOB_ID=1 && \
+            export SLURM_PROCID=0 && \
+            export SLURM_TMPDIR=/tmp && \
+            export TMPDIR=/tmp && \
+            echo "INFO: Executing mesh.sh with job-fake.sh as argument..." && \
+            bash {scratch_mount_path}/mesh.sh {scratch_mount_path}/job-fake.sh
+            """
+        else:
+            script_wrap = f"""
+            apk add --no-cache curl bash procps gcompat libc6-compat iproute2 util-linux shadow
+            echo '{encoded_script}' | base64 -d > {scratch_mount_path}/mesh.sh
+            chmod 0755 {scratch_mount_path}/mesh.sh
+            bash {scratch_mount_path}/mesh.sh
+            """
+        # endregion / Prepare setup script
 
         # region Add to pod spec the init container to write and execute mesh.sh
         setup_container = k.V1Container(
@@ -439,48 +492,18 @@ class KubernetesPluginService(BaseService):
                 "Always" if (self.config.get(Option.MESH_INIT_CONTAINER, "True").lower() == "true") else None
             ),
             command=["/bin/sh", "-c"],
-            args=[
-                f"""
-                apk add --no-cache curl bash procps gcompat libc6-compat iproute2 util-linux shadow && \
-                echo '{encoded_script}' | base64 -d > {script_mount_path}/mesh.sh && \
-                sed -i 's/fg 1/fg %1/g' {script_mount_path}/mesh.sh && \
-                sed -i 's|unshare \\$UNSHARE_FLAGS --net --mount \\$TMPDIR/slirp.sh|\\$TMPDIR/slirp.sh|g' \\
-                    {script_mount_path}/mesh.sh && \
-                sed -i 's|^./slirp4netns|#./slirp4netns|' {script_mount_path}/mesh.sh && \
-                chmod 0755 {script_mount_path}/mesh.sh && \
-                cat > {script_mount_path}/job-fake.sh <<'EOFWRAPPER'
-#!/bin/bash
-# Application wrapper that runs inside mesh network namespace
-echo "INFO: Running application inside mesh network"
-echo "INFO: Network interfaces:"
-ip addr show || true
-echo "INFO: Routes:"
-ip route show || true
-echo "INFO: Testing connectivity..."
-ping -c 2 10.7.0.1 || echo "Warning: Cannot reach WireGuard endpoint"
-echo "INFO: Mesh network is ready, keeping namespace alive..."
-# Signal to waiting containers that mesh setup is complete
-touch {script_mount_path}/mesh-ready
-# Keep the container running to maintain the mesh network
-sleep infinity
-EOFWRAPPER
-                chmod 0755 {script_mount_path}/job-fake.sh && \
-                export SLURM_JOB_ID=1 && \
-                export SLURM_PROCID=0 && \
-                export SLURM_TMPDIR=/tmp && \
-                export TMPDIR=/tmp && \
-                echo "INFO: Executing mesh.sh with job-fake.sh as argument..." && \
-                bash {script_mount_path}/mesh.sh {script_mount_path}/job-fake.sh
-                """
-            ],
-            volume_mounts=[k.V1VolumeMount(name=script_volume_name, mount_path=script_mount_path)],
+            args=[script_wrap],
+            volume_mounts=[k.V1VolumeMount(name=scratch_volume, mount_path=scratch_mount_path)],
             security_context=k.V1SecurityContext(
                 privileged=True, capabilities=k.V1Capabilities(add=["SYS_ADMIN", "NET_ADMIN", "SYS_CHROOT"])
             ),
+            env=[
+                k.V1EnvVar(name="TMPDIR", value=scratch_mount_path),
+            ],
             # Main containers will not start until this probe passes (sidecar init container behaviour, K8s 1.29+)
             startup_probe=(
                 k.V1Probe(
-                    _exec=k.V1ExecAction(command=["test", "-f", f"{script_mount_path}/mesh-ready"]),
+                    _exec=k.V1ExecAction(command=["test", "-f", f"{scratch_mount_path}/mesh-ready"]),
                     period_seconds=2,
                     failure_threshold=60,  # wait up to 120 s for mesh setup to complete
                 )

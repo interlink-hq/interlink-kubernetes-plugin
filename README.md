@@ -202,8 +202,10 @@ in the **local** cluster and back.
 The plugin implements the mesh networking setup through a `mesh-setup`
 [Sidecar Container](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/)
 that is injected into offloaded pods.
-Accordingly, the InterLink Virtual Kubelet in the **local** cluster must be configured
-to provide a custom mesh setup script:
+
+To enable this feature, create the following custom mesh setup script ConfigMap in the local cluster:
+[src/infr/manifests/custom-mesh-script-k8s.sh](src/infr/manifests/custom-mesh-script-k8s.sh).
+Then deploy the InterLink Virtual Kubelet with `virtualNode.network.fullMesh=true` and the following additional configuration:
 
 ```yaml
 virtualNode:
@@ -211,13 +213,10 @@ virtualNode:
     # Enable full mesh networking
     fullMesh: true
     ... other mesh config ...
-    # Mesh script for Kubernetes plugin
+    # Custom mesh script for Kubernetes plugin
     meshScriptTemplatePath: "/etc/interlink/custom-mesh.sh"
-    meshScriptConfigMapName: "mesh-script-template-k8s"
+    meshScriptConfigMapName: "custom-mesh-script-k8s"
 ```
-
-where the custom script is defined by the following ConfigMap:
-[src/infr/manifests/mesh-script-template-k8s.sh](src/infr/manifests/mesh-script-template-k8s.sh).
 
 The mesh networking setup creates a secure overlay network between the local and remote clusters,
 allowing pods to communicate as if they were in the same cluster.

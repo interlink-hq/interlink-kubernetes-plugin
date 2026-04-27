@@ -3,20 +3,6 @@
     "configurations": [
         // Launch configurations
         {
-            "name": "[interlink-kubernetes-plugin] Launch app.server (TCP socket)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "app.server",
-            "args": [],
-            "env": {
-                "APP_SOCKET_ADDRESS": "http://0.0.0.0",
-                "APP_SOCKET_PORT": "30400",
-                "UVICORN_RELOAD": "true"
-            },
-            "justMyCode": false,
-            "cwd": "${workspaceFolder}/src",
-        },
-        {
             "name": "[interlink-kubernetes-plugin] Launch app.server (Unix socket)",
             "type": "debugpy",
             "request": "launch",
@@ -30,6 +16,20 @@
             "justMyCode": false,
             "cwd": "${workspaceFolder}/src",
         },        
+        {
+            "name": "[interlink-kubernetes-plugin] Launch app.server (TCP socket)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.server",
+            "args": [],
+            "env": {
+                "APP_SOCKET_ADDRESS": "http://0.0.0.0",
+                "APP_SOCKET_PORT": "30400",
+                "UVICORN_RELOAD": "true"
+            },
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/src",
+        },
         {
             "name": "[interlink-kubernetes-plugin] Launch FastAPI",
             "type": "debugpy",

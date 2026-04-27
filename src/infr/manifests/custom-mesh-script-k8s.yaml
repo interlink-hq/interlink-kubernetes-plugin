@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mesh-script-template-k8s
+  name: custom-mesh-script-k8s
   namespace: interlink
 data:
   custom-mesh.sh: |

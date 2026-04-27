@@ -13,10 +13,10 @@
 # or locally within the cluster:
 # - ssh root@httpbin.test.svc.cluster.local -p 2222
 ---
-# apiVersion: v1
-# kind: Namespace
-# metadata:
-#   name: test
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -103,13 +103,17 @@ spec:
       labels:
         app: httpbin
         version: v1
+      # The following annotations are required if deploying in a namespace with istio sidecar injection enabled
       # annotations:
-      #   interlink.eu/disable-offload-init-containers: "istio-validation,istio-proxy"
+      #   interlink.eu/disable-offload-init-containers: istio-validation,istio-proxy
+      #   interlink.eu/shadow-same-ns: "true"
+      #   traffic.sidecar.istio.io/excludeInboundPorts: 28080,51820,15020,15021,15090
+      #   traffic.sidecar.istio.io/excludeOutboundPorts: 8888,8080,80
     spec:
       serviceAccountName: httpbin
       nodeSelector:
         virtual-node.interlink/type: virtual-kubelet
-        kubernetes.io/hostname: vnode-interlink-edge-dev
+        # kubernetes.io/hostname: vnode-interlink-k8s-edge-dev
       tolerations:
       - key: "virtual-node.interlink/no-schedule"
         operator: "Equal"
